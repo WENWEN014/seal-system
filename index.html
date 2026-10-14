@@ -1,0 +1,1061 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>证照印章管理系统</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,"Segoe UI","Microsoft YaHei",sans-serif;background:#f5f6f8;color:#1f2328;font-size:14px;line-height:1.6}
+header{background:#fff;border-bottom:1px solid #e3e5e8;padding:10px 20px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:100;flex-wrap:wrap}
+header h1{font-size:17px;font-weight:600}
+.spacer{flex:1}
+nav{background:#fff;border-bottom:1px solid #e3e5e8;padding:0 20px;display:flex;gap:4px;position:sticky;top:52px;z-index:99;overflow-x:auto}
+nav button{background:none;border:none;padding:12px 16px;font-size:14px;color:#5a6068;cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap}
+nav button.on{color:#1f6feb;border-bottom-color:#1f6feb;font-weight:500}
+main{padding:20px;max-width:1440px;margin:0 auto}
+.card{background:#fff;border:1px solid #e3e5e8;border-radius:8px;padding:16px;margin-bottom:16px}
+.sec{font-size:15px;font-weight:600;margin-bottom:12px;color:#1f2328}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:16px}
+.stat{background:#fff;border:1px solid #e3e5e8;border-radius:8px;padding:14px}
+.stat .v{font-size:26px;font-weight:600;color:#1f2328}
+.stat .l{font-size:12px;color:#6a737d;margin-top:2px}
+.stat.warn .v{color:#d1242f}.stat.ok .v{color:#1a7f37}.stat.amber .v{color:#bf8700}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{background:#f6f8fa;text-align:left;padding:8px 10px;font-weight:600;border-bottom:1px solid #e3e5e8;color:#3d444d;white-space:nowrap}
+td{padding:8px 10px;border-bottom:1px solid #eff1f3;vertical-align:top}
+tr:hover td{background:#fafbfc}
+button{background:#1f6feb;color:#fff;border:none;padding:7px 14px;border-radius:6px;cursor:pointer;font-size:13px}
+button:hover{background:#1a5fd0}
+button.ghost{background:#fff;color:#3d444d;border:1px solid #d0d7de}
+button.ghost:hover{background:#f6f8fa}
+button.sm{padding:4px 9px;font-size:12px}
+button.danger{background:#d1242f}
+button.danger:hover{background:#b3232f}
+button:disabled{background:#c9ced4;cursor:not-allowed}
+input,select,textarea{font-family:inherit;font-size:13px;padding:6px 9px;border:1px solid #d0d7de;border-radius:6px;background:#fff;color:#1f2328}
+input:focus,select:focus,textarea:focus{outline:none;border-color:#1f6feb;box-shadow:0 0 0 3px rgba(31,111,235,.1)}
+.frow{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;margin-bottom:12px}
+.fg{display:flex;flex-direction:column;gap:4px}
+.fg .t{font-size:12px;color:#6a737d}
+.badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:12px;white-space:nowrap}
+.b-in{background:#dafbe1;color:#1a7f37}
+.b-out{background:#ffebe9;color:#d1242f}
+.b-off{background:#f0f1f3;color:#6a737d}
+.b-warn{background:#fff8c5;color:#9a6700}
+.b-blue{background:#ddf4ff;color:#0969da}
+.b-purple{background:#fbefff;color:#8250df}
+.tip{background:#ddf4ff;border-left:3px solid #0969da;padding:10px 12px;border-radius:4px;font-size:13px;margin-bottom:12px;color:#0c4a83}
+.muted{color:#6a737d;font-size:13px}
+.mini{font-size:12px;color:#6a737d}
+.scroll{max-height:520px;overflow:auto;border:1px solid #e3e5e8;border-radius:6px}
+.toolbar{display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap}
+.cab{border:1px solid #e3e5e8;border-radius:8px;padding:12px;margin-bottom:12px;background:#fff}
+.cab-head{display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap}
+.cab-head .nm{font-size:15px;font-weight:600}
+.grid43{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.slot{border:1px dashed #d8dee4;border-radius:6px;min-height:74px;background:#fafbfc;display:flex;align-items:stretch;padding:0}
+.slot.over{border-color:#1f6feb;background:#eaf3ff}
+.slot .ph{width:100%;display:flex;align-items:center;justify-content:center;color:#c2c8cf;font-size:12px}
+.bk{flex:1;border:1px solid #c9d1d9;border-radius:6px;background:#fff;padding:8px;cursor:grab;display:flex;flex-direction:column;justify-content:center;gap:2px}
+.bk:active{cursor:grabbing}
+.bk.drag{opacity:.4}
+.bk .bn{font-weight:600;font-size:13px}
+.bk .bs{font-size:11px;color:#6a737d}
+.bk .cnt{font-size:11px;color:#3d444d}
+.bk.out{border-color:#f0b8b3;background:#fff5f4}
+.chk{display:inline-flex;align-items:center;gap:4px;font-size:13px;margin-right:10px}
+.msg{position:fixed;bottom:20px;right:20px;z-index:900}
+.msg div{background:#1f2328;color:#fff;padding:10px 16px;border-radius:6px;margin-top:8px;font-size:13px}
+.msg div.err{background:#d1242f}
+#modalMask{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:800;overflow:auto;padding:40px 20px}
+#modalMask.show{display:block}
+#modalBox{background:#fff;border-radius:10px;padding:20px;max-width:1000px;margin:0 auto;max-height:80vh;overflow:auto}
+#modalBox h3{font-size:16px;margin-bottom:14px}
+#modalBox h4{font-size:14px;margin:14px 0 8px}
+.flow{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:6px 0;font-size:13px}
+.flow .n{padding:4px 10px;border-radius:5px;background:#f0f1f3;color:#3d444d}
+.flow .n.p{background:#fff8c5;color:#9a6700}
+.flow .ar{color:#6a737d}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media(max-width:900px){.grid2{grid-template-columns:1fr}}
+.loading{padding:40px;text-align:center;color:#6a737d}
+.tag{display:inline-block;padding:1px 6px;border-radius:4px;font-size:11px;background:#f0f1f3;color:#5a6068;margin-right:4px}
+.cogroup{border:1px solid #e3e5e8;border-radius:6px;padding:10px;margin-bottom:8px;background:#fafbfc}
+.cogroup .ch{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.cogroup .ch .nm{font-weight:600;font-size:13px}
+.seallist{display:flex;flex-wrap:wrap;gap:6px;margin-left:22px}
+.roflag{background:#fff8c5;color:#9a6700;padding:1px 6px;border-radius:4px;font-size:11px}
+.opbar{position:sticky;bottom:0;background:#fff;border:1px solid #e3e5e8;border-radius:8px;padding:12px;margin-top:12px;display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;box-shadow:0 -2px 8px rgba(0,0,0,.05)}
+</style>
+</head>
+<body>
+<header>
+  <h1>证照印章管理系统</h1>
+  <span id="status" class="mini">加载中…</span>
+  <div class="spacer"></div>
+  <span id="who" class="mini"></span>
+  <button id="btnLogin" class="ghost" onclick="showLogin()">管理员登录</button>
+  <button id="btnLogout" class="ghost" onclick="doLogout()" style="display:none">退出</button>
+  <button class="ghost" onclick="reloadAll()">刷新</button>
+</header>
+<nav id="nav"></nav>
+<main id="main"><div class="loading">正在加载数据…</div></main>
+<div id="modalMask" onclick="if(event.target===this) closeModal()"><div id="modalBox"></div></div>
+<div id="printArea"></div>
+<div id="msgHost" class="msg"></div>
+
+<script>
+/* ============ 状态 ============ */
+let DB={items:[],locations:[],movements:[],cabinets:[],families:[]};
+let ui={tab:"dash",q:"",qType:"全部",qStatus:"全部",ops:"out",invAll:true,invSel:new Set(),invKind:"全部",traceQ:""};
+let sel={out:new Set(),in:new Set(),mv:new Set()};   // 三个 Tab 各自勾选的 item_id
+let selCo=new Set();                                  // 已展开的公司
+let AUTH={token:localStorage.getItem("seal_token")||"",user:localStorage.getItem("seal_user")||"",
+          ts:parseInt(localStorage.getItem("seal_ts")||"0",10)};
+let OPERATOR=localStorage.getItem("seal_operator")||"";
+const SEAL_TYPES=["公章","法人章","财务章","合同章","发票章"];
+const STAT_IN="在库",STAT_OUT="在外部",STAT_OFF="已缴销";
+const ROWS=4,COLS=3;
+
+function $(id){return document.getElementById(id);}
+function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
+function nowStr(){const d=new Date(),p=n=>String(n).padStart(2,"0");
+  return d.getFullYear()+"-"+p(d.getMonth()+1)+"-"+p(d.getDate())+" "+p(d.getHours())+":"+p(d.getMinutes());}
+function todayStr(){return nowStr().slice(0,10);}
+function toast(t,ok){const h=$("msgHost");const d=document.createElement("div");
+  d.textContent=t;if(ok===false)d.className="err";h.appendChild(d);setTimeout(()=>d.remove(),3200);}
+function isAdmin(){
+  if(!AUTH.token) return false;
+  const days=(Date.now()-AUTH.ts)/86400000;
+  if(days>7){ localStorage.removeItem("seal_token"); AUTH.token=""; return false; }
+  return true;
+}
+function statusBadge(it){
+  if(it["状态"]===STAT_OFF)return'<span class="badge b-off">已缴销</span>';
+  if(it["状态"]===STAT_OUT)return'<span class="badge b-out">在 '+esc(it["持有人"]||it["当前位置"]||"外部")+' 处</span>';
+  if(!it["当前位置"]||it["当前位置"]==="待分配")return'<span class="badge b-warn">待定位</span>';
+  return'<span class="badge b-in">在库</span>';
+}
+function posTag(it){const t=it["当前位置类型"];
+  return'<span class="badge '+(t==="人员"?"b-purple":"b-blue")+'">'+esc(it["当前位置"]||"—")+'</span>';}
+
+/* ============ API ============ */
+async function api(path,body){
+  if(body&&isAdmin()&&body.token===undefined) body.token=AUTH.token;
+  const opt={method:body?"POST":"GET",headers:{"Content-Type":"application/json"}};
+  if(body)opt.body=JSON.stringify(body);
+  const r=await fetch(path,opt);
+  const j=await r.json().catch(()=>({ok:false,msg:"响应解析失败"}));
+  if(j&&j.ok===false&&/未登录|过期/.test(j.msg||"")){
+    localStorage.removeItem("seal_token");AUTH.token="";syncHeader();render();
+  }
+  return j;
+}
+async function reloadAll(){
+  $("status").textContent="加载中…";
+  const r=await api("/api/load");
+  if(!r.ok){$("status").textContent="加载失败";
+    $("main").innerHTML='<div class="card"><p style="color:#d1242f">数据加载失败：'+esc(r.msg||"")+'</p></div>';return;}
+  DB.items=r.items||[];DB.locations=r.locations||[];DB.movements=r.movements||[];
+  DB.cabinets=r.cabinets||[];DB.families=r.families||[];
+  $("status").textContent="共 "+DB.items.length+" 件资料 · "+DB.movements.length+" 条流转记录";
+  render();
+}
+
+/* ============ 登录 ============ */
+function syncHeader(){
+  const a=isAdmin();
+  $("btnLogin").style.display=a?"none":"inline-block";
+  $("btnLogout").style.display=a?"inline-block":"none";
+  $("who").textContent=a?("管理员 "+esc(AUTH.user)+" · 操作人 "+esc(OPERATOR||"未设置")):"（只读前台）";
+}
+function showLogin(){
+  openModal('<h3>管理员登录</h3>'
+    +'<div class="frow"><div class="fg"><span class="t">账号</span><input id="lgUser" value="二维"></div>'
+    +'<div class="fg"><span class="t">密码</span><input id="lgPwd" type="password"></div></div>'
+    +'<p class="mini">登录后可进行出库、入库、调拨与数据管理；登录状态保留 7 天。</p>'
+    +'<div style="margin-top:10px"><button onclick="doLogin()">登录</button> '
+    +'<button class="ghost" onclick="closeModal()">取消</button></div>');
+  setTimeout(()=>{const p=$("lgPwd");if(p)p.focus();},100);
+}
+async function doLogin(){
+  const u=($("lgUser").value||"").trim(),p=($("lgPwd").value||"").trim();
+  const r=await api("/api/login",{user:u,pwd:p});
+  if(!r.ok){toast(r.msg||"登录失败",false);return;}
+  AUTH.token=r.token;AUTH.user=r.user;AUTH.ts=Date.now();
+  localStorage.setItem("seal_token",r.token);
+  localStorage.setItem("seal_user",r.user);
+  localStorage.setItem("seal_ts",String(AUTH.ts));
+  if(!OPERATOR){askOperator();}
+  closeModal();syncHeader();render();toast("已登录，欢迎 "+r.user,true);
+}
+async function doLogout(){
+  await api("/api/logout",{token:AUTH.token});
+  localStorage.removeItem("seal_token");localStorage.removeItem("seal_user");localStorage.removeItem("seal_ts");
+  AUTH={token:"",user:"",ts:0};syncHeader();render();toast("已退出，当前为只读前台",true);
+}
+function askOperator(){
+  const n=prompt("请输入操作人姓名（将记录在所有操作留痕中）：",OPERATOR||"二维");
+  if(n&&n.trim()){OPERATOR=n.trim();localStorage.setItem("seal_operator",OPERATOR);}
+  syncHeader();
+}
+
+/* ============ 导航 ============ */
+function renderNav(){
+  const front=[["dash","看板"],["search","查询定位"],["cabs","柜子图"],["ops","出入库"]];
+  const admin=[["trace","流转轨迹"],["inv","盘点导出"],["data","数据管理"]];
+  let tabs=front.slice();
+  if(isAdmin()) tabs=tabs.concat(admin);
+  if(!isAdmin()&&admin.some(t=>t[0]===ui.tab)) ui.tab="dash";
+  $("nav").innerHTML=tabs.map(([k,n])=>
+    '<button class="'+(ui.tab===k?"on":"")+'" onclick="switchTab(\''+k+'\')">'+n+'</button>').join("");
+}
+function switchTab(t){ui.tab=t;render();window.scrollTo(0,0);}
+function render(){syncHeader();renderNav();const m=$("main");m.innerHTML="";
+  ({dash:renderDash,search:renderSearch,cabs:renderCabs,ops:renderOps,
+    trace:renderTrace,inv:renderInv,data:renderData})[ui.tab](m);}
+
+/* ============ 看板 ============ */
+function stats(){
+  const it=DB.items;
+  return{total:it.length,seal:it.filter(i=>i["资料类别"]==="章").length,
+    lic:it.filter(i=>i["资料类别"]==="执照").length,
+    in:it.filter(i=>i["状态"]===STAT_IN&&i["当前位置"]&&i["当前位置"]!=="待分配").length,
+    out:it.filter(i=>i["状态"]===STAT_OUT).length,
+    off:it.filter(i=>i["状态"]===STAT_OFF).length,
+    pend:it.filter(i=>i["状态"]!==STAT_OFF&&(!i["当前位置"]||i["当前位置"]==="待分配")).length,
+    co:new Set(it.map(i=>i["公司名称"])).size};
+}
+function renderDash(m){
+  const s=stats();
+  let h='<div class="cards">'
+    +'<div class="stat"><div class="v">'+s.co+'</div><div class="l">公司数</div></div>'
+    +'<div class="stat"><div class="v">'+s.total+'</div><div class="l">章证总数（章 '+s.seal+' / 执照 '+s.lic+'）</div></div>'
+    +'<div class="stat ok"><div class="v">'+s.in+'</div><div class="l">在库已定位</div></div>'
+    +'<div class="stat warn"><div class="v">'+s.out+'</div><div class="l">在外部（未归还）</div></div>'
+    +'<div class="stat amber"><div class="v">'+s.pend+'</div><div class="l">待定位</div></div>'
+    +'<div class="stat"><div class="v">'+s.off+'</div><div class="l">已缴销</div></div></div>';
+  const outItems=DB.items.filter(i=>i["状态"]===STAT_OUT);
+  const byP={};outItems.forEach(i=>{const p=i["持有人"]||i["当前位置"]||"未知";(byP[p]=byP[p]||[]).push(i);});
+  h+='<div class="card"><h2 class="sec">在外部汇总（未归还）</h2>';
+  if(!outItems.length)h+='<p class="muted">当前全部资料都在库</p>';
+  else{h+='<table><tr><th>持有人</th><th>件数</th><th>涉及公司</th><th></th></tr>';
+    for(const p in byP){const l=byP[p],cos=[...new Set(l.map(i=>i["公司名称"]))];
+      h+='<tr><td><b>'+esc(p)+'</b></td><td>'+l.length+'</td><td>'+cos.length+' 家：'
+        +esc(cos.slice(0,3).join("、"))+(cos.length>3?" 等":"")+'</td>'
+        +'<td><button class="sm ghost" onclick="showPerson(\''+esc(p)+'\')">查看明细</button></td></tr>';}
+    h+='</table>';}
+  h+='</div>';
+  const byF={};DB.items.forEach(i=>{if(i["状态"]===STAT_OFF)return;
+    const f=i["家族"]||"—";byF[f]=byF[f]||{n:0,out:0,co:new Set()};
+    byF[f].n++;byF[f].co.add(i["公司名称"]);if(i["状态"]===STAT_OUT)byF[f].out++;});
+  h+='<div class="card"><h2 class="sec">各家族资料统计</h2><div class="scroll"><table>'
+    +'<tr><th>家族</th><th>公司数</th><th>资料数</th><th>在外部</th><th></th></tr>';
+  Object.keys(byF).sort().forEach(f=>{const d=byF[f];
+    h+='<tr><td><b>'+esc(f)+'</b></td><td>'+d.co.size+'</td><td>'+d.n+'</td>'
+      +'<td>'+(d.out?'<span class="badge b-out">'+d.out+'</span>':'0')+'</td>'
+      +'<td><button class="sm ghost" onclick="ui.q=\''+esc(f)+'\';ui.qType=\'家族\';switchTab(\'search\')">查看</button></td></tr>';});
+  m.innerHTML=h+'</table></div></div>';
+}
+function showPerson(p){
+  const l=DB.items.filter(i=>i["状态"]===STAT_OUT&&(i["持有人"]||i["当前位置"])===p);
+  let h='<h3>在 '+esc(p)+' 处的资料（'+l.length+' 件）</h3><div class="scroll"><table>'
+    +'<tr><th>公司</th><th>资料类型</th><th>出库时间</th><th>事由</th></tr>';
+  l.forEach(i=>{const mv=DB.movements.filter(x=>x["item_id"]===i["item_id"]&&x["动作"]==="出库").pop();
+    h+='<tr><td>'+esc(i["公司名称"])+'</td><td>'+esc(i["资料类型"])+'</td>'
+      +'<td>'+esc(i["出库时间"]||"—")+'</td><td>'+esc(mv?mv["事由"]:"")+'</td></tr>';});
+  openModal(h+'</table></div>');
+}
+
+/* ============ 查询定位 ============ */
+function renderSearch(m){
+  m.innerHTML='<div class="card"><h2 class="sec">查询定位</h2><div class="toolbar">'
+    +'<input id="q" value="'+esc(ui.q)+'" placeholder="公司名 / 法人 / 家族 / 位置 / 章类型" style="width:320px" oninput="ui.q=this.value;renderSearchList()">'
+    +'<select onchange="ui.qType=this.value;renderSearchList()">'
+    +['全部','公司名称','法人','家族','资料类型','当前位置'].map(t=>'<option'+(ui.qType===t?" selected":"")+'>'+t+'</option>').join("")+'</select>'
+    +'<select onchange="ui.qStatus=this.value;renderSearchList()">'
+    +['全部','在库','在外部','已缴销','待定位'].map(t=>'<option'+(ui.qStatus===t?" selected":"")+'>'+t+'</option>').join("")+'</select>'
+    +'<span class="spacer"></span><span id="qCount" class="mini"></span></div><div id="qList"></div></div>';
+  renderSearchList();
+}
+function renderSearchList(){
+  const q=(ui.q||"").trim().toLowerCase();
+  let l=DB.items;
+  if(q){const f=ui.qType==="全部"?null:ui.qType;
+    l=l.filter(i=>f?String(i[f]||"").toLowerCase().includes(q)
+      :["公司名称","法人","家族","资料类型","当前位置"].some(k=>String(i[k]||"").toLowerCase().includes(q)));}
+  if(ui.qStatus==="在库")l=l.filter(i=>i["状态"]===STAT_IN&&i["当前位置"]&&i["当前位置"]!=="待分配");
+  else if(ui.qStatus==="在外部")l=l.filter(i=>i["状态"]===STAT_OUT);
+  else if(ui.qStatus==="已缴销")l=l.filter(i=>i["状态"]===STAT_OFF);
+  else if(ui.qStatus==="待定位")l=l.filter(i=>i["状态"]!==STAT_OFF&&(!i["当前位置"]||i["当前位置"]==="待分配"));
+  $("qCount").textContent="共 "+l.length+" 件";
+  let h='<div class="scroll"><table><tr><th>公司</th><th>家族</th><th>法人</th><th>资料类型</th><th>位置</th><th>状态</th><th></th></tr>';
+  l.slice(0,500).forEach(i=>{h+='<tr><td>'+esc(i["公司名称"])+'</td><td>'+esc(i["家族"])+'</td><td>'+esc(i["法人"])+'</td>'
+    +'<td>'+esc(i["资料类型"])+'</td><td>'+posTag(i)+'</td><td>'+statusBadge(i)+'</td>'
+    +'<td><button class="sm ghost" onclick="itemDetail(\''+i["item_id"]+'\')">详情</button></td></tr>';});
+  if(!l.length)h+='<tr><td colspan="7" class="muted">没有匹配的资料</td></tr>';
+  $("qList").innerHTML=h+'</table></div>';
+}
+function itemDetail(id){
+  const i=DB.items.find(x=>x["item_id"]===id);if(!i)return;
+  const mvs=DB.movements.filter(m=>m["item_id"]===id);
+  let h='<h3>'+esc(i["公司名称"])+' · '+esc(i["资料类型"])+'</h3><div class="grid2"><div>'
+    +'<p><b>公司：</b>'+esc(i["公司名称"])+'</p><p><b>家族：</b>'+esc(i["家族"])+'　<b>法人：</b>'+esc(i["法人"])+'</p>'
+    +'<p><b>类型：</b>'+esc(i["资料类型"])+'（'+esc(i["资料类别"])+'）</p>'
+    +'<p><b>当前位置：</b>'+posTag(i)+' '+statusBadge(i)+'</p>'
+    +'<p><b>持有人：</b>'+esc(i["持有人"]||"—")+'　<b>出库时间：</b>'+esc(i["出库时间"]||"—")+'</p>'
+    +'<p><b>备注：</b>'+esc(i["备注"]||"—")+'</p></div><div><h4>流转轨迹</h4>';
+  if(!mvs.length)h+='<p class="muted">暂无记录</p>';
+  else mvs.forEach(m=>{h+='<div class="flow"><span class="mini">'+esc(m["时间"])+'</span>'
+    +'<span class="tag">'+esc(m["动作"])+'</span><span class="n">'+esc(m["起点名称"]||"—")+'</span>'
+    +'<span class="ar">→</span><span class="n'+(m["终点类型"]==="人员"?" p":"")+'">'+esc(m["终点名称"]||"—")+'</span>'
+    +'<span class="mini">'+esc(m["操作人"])+'</span></div>';
+    if(m["事由"])h+='<div class="mini" style="margin:0 0 6px 60px">事由：'+esc(m["事由"])+'</div>';});
+  h+='</div></div><div style="margin-top:14px"><button class="ghost" onclick="closeModal()">关闭</button></div>';
+  openModal(h);
+}
+
+/* ============ 柜子图（4 排 × 3 位，管理员可拖拽）============ */
+function cabSeq(cab){
+  const seq=new Array(ROWS*COLS).fill(null);
+  DB.locations.filter(l=>l["类型"]==="位置"&&l["柜子"]===cab).forEach(l=>{
+    const r=parseInt(l["排"]||"0",10),c=parseInt(l["位"]||"0",10);
+    if(r>=1&&r<=ROWS&&c>=1&&c<=COLS) seq[(r-1)*COLS+(c-1)]=l["名称"];
+  });
+  return seq;
+}
+function renderCabs(m){
+  const admin=isAdmin();
+  let h=admin?'<div class="tip">拖动筐可调整位置：拖到空格直接放入，拖到有筐的格子会把后面的筐依次挤开。支持跨柜拖动（整筐搬家）。</div>'
+             :'<div class="tip">当前为只读前台，柜子布局由管理员维护。</div>';
+  if(admin) h+='<div class="toolbar" style="margin-bottom:12px"><button onclick="addCabinet()">＋ 新增柜子</button>'
+    +'<span class="mini">新柜子为空柜（4 排 × 3 位），之后在柜内新增筐即可</span></div>';
+  DB.cabinets.forEach(cab=>{
+    const seq=cabSeq(cab.name);
+    const used=seq.filter(x=>x).length;
+    h+='<div class="cab"><div class="cab-head"><span class="nm">'+esc(cab.name)+'</span>'
+      +'<span class="mini">'+used+' / '+(ROWS*COLS)+' 个筐位</span>'
+      +(admin?'<button class="sm ghost" onclick="addLoc(\''+esc(cab.name)+'\')">＋ 新增筐</button>'
+             +'<button class="sm ghost" onclick="renameCab(\''+esc(cab.name)+'\')">改名</button>'
+             +'<button class="sm ghost" onclick="delCab(\''+esc(cab.name)+'\')">删除柜</button>':'')+'</div>'
+      +'<div class="grid43">';
+    for(let i=0;i<ROWS*COLS;i++){
+      const nm=seq[i];
+      h+='<div class="slot" data-cab="'+esc(cab.name)+'" data-idx="'+i+'"'
+        +(admin?' ondragover="onDragOver(event)" ondragleave="onDragLeave(event)" ondrop="onDrop(event)"':'')+'>';
+      if(nm){
+        const its=DB.items.filter(x=>x["当前位置"]===nm&&x["状态"]!==STAT_OFF);
+        const cos=new Set(its.map(x=>x["公司名称"]));
+        const outN=DB.items.filter(x=>x["状态"]===STAT_OUT&&x["持有人"]===nm).length;
+        h+='<div class="bk'+(outN?' out':'')+'"'+(admin?' draggable="true" ondragstart="onDragStart(event,\''+esc(cab.name)+'\','+i+')" ondragend="onDragEnd(event)"':'')
+          +' onclick="basketDetail(\''+esc(nm)+'\')"><div class="bn">'+esc(nm)+'</div>'
+          +'<div class="bs">'+esc((DB.locations.find(l=>l["名称"]===nm)||{})["关联家族"]||"—")+'</div>'
+          +'<div class="cnt">'+cos.size+' 家 · '+its.length+' 件</div></div>';
+      } else h+='<div class="ph">空位</div>';
+      h+='</div>';
+    }
+    h+='</div></div>';
+  });
+  // 人员区
+  const ps=DB.locations.filter(l=>l["类型"]==="人员");
+  h+='<div class="cab"><div class="cab-head"><span class="nm">人员（外部持有）</span>'
+    +(admin?'<button class="sm ghost" onclick="addPerson()">＋ 新增人员</button>':'')+'</div><div class="grid43">';
+  ps.forEach(p=>{const n=DB.items.filter(i=>i["状态"]===STAT_OUT&&i["持有人"]===p["名称"]).length;
+    h+='<div class="slot"><div class="bk" style="cursor:pointer" onclick="showPerson(\''+esc(p["名称"])+'\')">'
+      +'<div class="bn">'+esc(p["名称"])+'</div><div class="bs">人员</div>'
+      +'<div class="cnt">持有 '+n+' 件</div></div></div>';});
+  h+='</div></div>';
+  m.innerHTML=h;
+}
+let _drag=null;
+function onDragStart(e,cab,idx){_drag={cab,idx,name:cabSeq(cab)[idx]};e.target.classList.add("drag");
+  try{e.dataTransfer.setData("text/plain",_drag.name||"");}catch(x){}}
+function onDragEnd(e){if(e.target)e.target.classList.remove("drag");
+  document.querySelectorAll(".slot.over").forEach(s=>s.classList.remove("over"));}
+function onDragOver(e){e.preventDefault();e.currentTarget.classList.add("over");}
+function onDragLeave(e){e.currentTarget.classList.remove("over");}
+function onDrop(e){
+  e.preventDefault();e.currentTarget.classList.remove("over");
+  if(!_drag||!isAdmin())return;
+  const toCab=e.currentTarget.getAttribute("data-cab");
+  const toIdx=parseInt(e.currentTarget.getAttribute("data-idx"),10);
+  const fromCab=_drag.cab,fromIdx=_drag.idx,name=_drag.name;
+  if(!name)return;
+  const sFrom=cabSeq(fromCab);
+  if(fromCab===toCab){
+    if(fromIdx===toIdx)return;
+    const t=sFrom.slice();
+    t.splice(fromIdx,1);t.splice(toIdx,0,name);
+    const dropped=t.slice(ROWS*COLS).filter(x=>x);
+    if(dropped.length){toast("目标位置放不下，该排已满",false);return;}
+    applyLayout([{cab:fromCab,seq:t.slice(0,ROWS*COLS)}]);
+  }else{
+    const sTo=cabSeq(toCab);
+    const tFrom=sFrom.slice();tFrom[fromIdx]=null;
+    const tTo=sTo.slice();tTo.splice(toIdx,0,name);
+    const dropped=tTo.slice(ROWS*COLS).filter(x=>x);
+    if(dropped.length){toast("目标柜子放不下，空间已满",false);return;}
+    applyLayout([{cab:fromCab,seq:tFrom},{cab:toCab,seq:tTo.slice(0,ROWS*COLS)}]);
+  }
+}
+function applyLayout(list){
+  const payload=[];
+  const seen=new Set();
+  list.forEach(({cab,seq})=>{
+    if(seen.has(cab))return;seen.add(cab);
+    seq.forEach((nm,i)=>{if(nm)payload.push({名称:nm,柜子:cab,排:Math.floor(i/COLS)+1,位:(i%COLS)+1});});
+  });
+  api("/api/savelayout",{baskets:payload,operator:OPERATOR}).then(r=>{
+    if(!r.ok){toast(r.msg||"保存失败",false);return;}
+    toast(r.changed?"位置已保存":"位置未变化",true);reloadAll();
+  });
+}
+function basketDetail(name){
+  const its=DB.items.filter(i=>i["当前位置"]===name&&i["状态"]!==STAT_OFF);
+  let h='<h3>'+esc(name)+' — '+its.length+' 件</h3>'
+    +'<div class="toolbar"><button class="sm ghost" onclick="invFrom(\''+esc(name)+'\')">生成盘点清单</button>'
+    +(isAdmin()?'<button class="sm ghost" onclick="renameLoc(\''+esc(name)+'\')">改名</button>'
+               +'<button class="sm ghost" onclick="delLoc(\''+esc(name)+'\')">删除筐</button>':'')+'</div>'
+    +'<div class="scroll"><table><tr><th>公司</th><th>家族</th><th>资料类型</th><th>状态</th><th></th></tr>';
+  if(!its.length)h+='<tr><td colspan="5" class="muted">空筐</td></tr>';
+  its.forEach(i=>{h+='<tr><td>'+esc(i["公司名称"])+'</td><td>'+esc(i["家族"])+'</td><td>'+esc(i["资料类型"])+'</td>'
+    +'<td>'+statusBadge(i)+'</td><td><button class="sm ghost" onclick="itemDetail(\''+i["item_id"]+'\')">详情</button></td></tr>';});
+  openModal(h+'</table></div>');
+}
+function addLoc(cab){
+  openModal('<h3>在 '+esc(cab)+' 新增收纳筐</h3>'
+    +'<div class="frow"><div class="fg"><span class="t">筐名称</span><input id="mbName" placeholder="如 '+esc(cab.slice(-1))+'01"></div>'
+    +'<div class="fg"><span class="t">关联家族</span><input id="mbFam" placeholder="选填"></div></div>'
+    +'<p class="mini">新筐会自动放到该柜第一个空位，之后可拖动调整。</p>'
+    +'<div style="margin-top:10px"><button onclick="mbAdd(\''+esc(cab)+'\')">新增</button> '
+    +'<button class="ghost" onclick="closeModal()">取消</button></div>');
+}
+async function mbAdd(cab){
+  const n=($("mbName").value||"").trim();if(!n){toast("请填写名称",false);return;}
+  const r=await api("/api/addloc",{name:n,type:"位置",cabinet:cab,family:($("mbFam").value||"").trim(),operator:OPERATOR});
+  if(!r.ok){toast(r.msg,false);return;}
+  closeModal();toast("已新增筐 "+n,true);await reloadAll();
+}
+/* ---- 新增柜子 ---- */
+const CN=["零","一","二","三","四","五","六","七","八","九","十"];
+function nextCabName(){
+  const n=DB.cabinets.length+1;
+  return "柜"+(CN[n]||n);
+}
+function addCabinet(){
+  if(!isAdmin()){toast("请先登录管理员",false);return;}
+  openModal('<h3>新增柜子</h3>'
+    +'<div class="frow"><div class="fg"><span class="t">柜子名称</span><input id="mcName" value="'+esc(nextCabName())+'"></div></div>'
+    +'<p class="mini">新柜子为空柜（'+ROWS+' 排 × '+COLS+' 位，共 '+ROWS*COLS+' 个筐位），名称不能与已有的柜子 / 筐 / 人员重复。</p>'
+    +'<div style="margin-top:10px"><button onclick="mcAdd()">新增</button> '
+    +'<button class="ghost" onclick="closeModal()">取消</button></div>');
+  const el=$("mcName");if(el){el.focus();el.select();}
+}
+async function mcAdd(){
+  const n=($("mcName").value||"").trim();
+  if(!n){toast("请填写柜子名称",false);return;}
+  const r=await api("/api/addcab",{name:n,operator:OPERATOR});
+  if(!r.ok){toast(r.msg||"新增失败",false);return;}
+  closeModal();toast("已新增柜子 "+n,true);await reloadAll();
+}
+/* ---- 改名（柜子 / 筐共用）---- */
+function renameModal(title,name,tip){
+  if(!isAdmin()){toast("请先登录管理员",false);return;}
+  openModal('<h3>'+esc(title)+'</h3>'
+    +'<div class="frow"><div class="fg"><span class="t">新名称</span><input id="rnNew" value="'+esc(name)+'"></div></div>'
+    +'<p class="mini">'+esc(tip)+'</p>'
+    +'<div style="margin-top:10px"><button onclick="rnGo(\''+esc(name)+'\')">保存</button> '
+    +'<button class="ghost" onclick="closeModal()">取消</button></div>');
+  const el=$("rnNew");if(el){el.focus();el.select();}
+}
+function renameCab(name){
+  renameModal("柜子改名",name,"改名后：柜内所有筐的所属柜子、流转轨迹里出现过的旧名字都会同步更新。");
+}
+function renameLoc(name){
+  renameModal("筐改名",name,"改名后：筐内资料的所在位置、流转轨迹里出现过的旧名字都会同步更新。");
+}
+async function rnGo(oldN){
+  const n=($("rnNew").value||"").trim();
+  if(!n){toast("请填写名称",false);return;}
+  const r=await api("/api/renameloc",{old:oldN,new:n,operator:OPERATOR});
+  if(!r.ok){toast(r.msg||"改名失败",false);return;}
+  closeModal();toast("已改名为 "+n,true);await reloadAll();
+}
+/* ---- 删除柜子（连带删除柜内空筐）---- */
+function delCab(name){
+  if(!isAdmin()){toast("请先登录管理员",false);return;}
+  const bs=DB.locations.filter(l=>l["类型"]==="位置"&&l["柜子"]===name);
+  const busy=bs.filter(b=>DB.items.some(i=>i["当前位置"]===b["名称"]&&i["状态"]!==STAT_OFF));
+  if(busy.length){toast("柜内还有 "+busy.length+" 个非空筐（"+busy.map(b=>b["名称"]).join("、")
+    +"），请先把筐拖到别的柜再删除",false);return;}
+  openModal('<h3>删除柜子「'+esc(name)+'」</h3>'
+    +'<p>'+(bs.length?"柜内 "+bs.length+" 个<b>空筐</b>会一起删除："+esc(bs.map(b=>b["名称"]).join("、"))
+                     :"该柜是空柜，没有筐。")+'</p>'
+    +'<p class="mini">删除后不可恢复（筐里有资料时不允许删除，会先提示）。</p>'
+    +'<div style="margin-top:10px"><button class="danger" onclick="dcGo(\''+esc(name)+'\')">确认删除</button> '
+    +'<button class="ghost" onclick="closeModal()">取消</button></div>');
+}
+async function dcGo(name){
+  const r=await api("/api/delcab",{name:name,operator:OPERATOR});
+  if(!r.ok){toast(r.msg||"删除失败",false);return;}
+  closeModal();toast("已删除柜子 "+name+(r.baskets?"（连带 "+r.baskets+" 个空筐）":""),true);await reloadAll();
+}
+/* ---- 删除筐 ---- */
+function delLoc(name){
+  if(!isAdmin()){toast("请先登录管理员",false);return;}
+  const its=DB.items.filter(i=>i["当前位置"]===name&&i["状态"]!==STAT_OFF);
+  if(its.length){toast("筐里还有 "+its.length+" 件资料，请先调拨或缴销后再删除",false);return;}
+  openModal('<h3>删除筐「'+esc(name)+'」</h3><p>该筐是空筐，删除后柜子上会空出这个位置。</p>'
+    +'<p class="mini">删除后不可恢复。</p>'
+    +'<div style="margin-top:10px"><button class="danger" onclick="dlGo(\''+esc(name)+'\')">确认删除</button> '
+    +'<button class="ghost" onclick="closeModal()">取消</button></div>');
+}
+async function dlGo(name){
+  const r=await api("/api/delloc",{name:name,operator:OPERATOR});
+  if(!r.ok){toast(r.msg||"删除失败",false);return;}
+  closeModal();toast("已删除筐 "+name,true);await reloadAll();
+}
+function addPerson(){
+  openModal('<h3>新增人员</h3><div class="frow"><div class="fg"><span class="t">姓名</span><input id="mpName"></div></div>'
+    +'<div style="margin-top:10px"><button onclick="mpAdd()">新增</button> '
+    +'<button class="ghost" onclick="closeModal()">取消</button></div>');
+}
+async function mpAdd(){
+  const n=($("mpName").value||"").trim();if(!n){toast("请填写姓名",false);return;}
+  const r=await api("/api/addloc",{name:n,type:"人员",operator:OPERATOR});
+  if(!r.ok){toast(r.msg,false);return;}
+  closeModal();toast("已新增人员 "+n,true);await reloadAll();
+}
+
+/* ============ 出入库（出库 / 入库 / 调拨）============ */
+const OPS_TABS=[["out","出库"],["in","入库"],["mv","调拨"]];
+function renderOps(m){
+  const admin=isAdmin();
+  let h='';
+  if(admin){
+    h+='<div class="card"><div class="toolbar">'
+      +OPS_TABS.map(([k,n])=>'<button class="'+(ui.ops===k?"":"ghost")+'" onclick="switchOps(\''+k+'\')">'+n+'</button>').join(" ")
+      +'<span class="spacer"></span><span id="opsCount" class="mini"></span></div>'
+      +'<div class="toolbar"><input id="opsQ" placeholder="搜索公司名 / 法人 / 家族" style="width:300px" oninput="renderOpsList()">'
+      +'<button class="sm ghost" onclick="clearSel()">清空勾选</button></div>'
+      +'<div id="opsList"></div><div id="opsBar"></div></div>';
+    if(ui.ops==="in") h+=newInHtml();
+  }
+  // 台账（前后台都能看）
+  h+='<div class="card"><h2 class="sec">出入库记录（最近 100 条）</h2><div id="ledger"></div></div>';
+  m.innerHTML=h;
+  if(admin){renderOpsList(); if(ui.ops==="in") niRenderForm();}
+  renderLedger();
+}
+
+/* ---- 新章入库（新公司 / 已有公司加章）---- */
+function newInHtml(){
+  return '<div class="card"><h2 class="sec">新章入库（新建公司 或 已有公司补章）</h2>'
+    +'<div class="frow"><div class="fg"><span class="t">方式</span><select id="niMode" onchange="niRenderForm()">'
+    +'<option value="new">新建公司入库</option><option value="exist">已有公司补章</option></select></div></div>'
+    +'<div id="niForm"></div></div>';
+}
+function niRenderForm(){
+  const box=$("niForm"); if(!box)return;
+  const mode=($("niMode")||{}).value||"new";
+  const bs=DB.locations.filter(l=>l["类型"]==="位置").map(l=>l["名称"]);
+  const bskSel='<div class="fg"><span class="t">入库到筐</span><select id="niBsk">'
+    +bs.map(b=>'<option>'+esc(b)+'</option>').join("")+'</select></div>';
+  let f='';
+  if(mode==="new"){
+    f='<div class="frow">'
+      +'<div class="fg"><span class="t">公司名称 *</span><input id="niName" style="width:240px"></div>'
+      +'<div class="fg"><span class="t">法人 *</span><input id="niLP"></div>'
+      +'<div class="fg"><span class="t">家族</span><input id="niFam"></div>'
+      +'<div class="fg"><span class="t">类型</span><select id="niType"><option>大陆</option><option>国外</option></select></div>'
+      +bskSel+'</div>'
+      +'<div class="frow"><span class="t">勾选本次入库的章：</span>'
+      +SEAL_TYPES.map(s=>'<label class="chk"><input type="checkbox" class="niSeal" value="'+s+'">'+s+'</label>').join("")
+      +'<label class="chk"><input type="checkbox" id="niLic" checked>营业执照</label></div>'
+      +'<div style="margin-top:8px"><button onclick="niExec()">执行入库</button></div>';
+  }else{
+    const cos=[...new Set(DB.items.map(i=>i["公司名称"]))].sort((a,b)=>a.localeCompare(b,"zh"));
+    f='<div class="frow">'
+      +'<div class="fg"><span class="t">选择公司</span><select id="niCo" style="width:260px" onchange="niExistChk()">'
+      +cos.map(c=>'<option>'+esc(c)+'</option>').join("")+'</select></div>'
+      +bskSel+'</div>'
+      +'<div class="frow"><span class="t">勾选要补的章（已有的会标注）：</span><span id="niExistSeals"></span></div>'
+      +'<div class="frow" id="niPick"></div>'
+      +'<div style="margin-top:8px"><button onclick="niExec()">执行入库</button></div>';
+  }
+  box.innerHTML=f;
+  if(mode==="exist") niExistChk();
+}
+function niExistChk(){
+  const name=($("niCo")||{}).value||"";
+  const mine=DB.items.filter(i=>i["公司名称"]===name);
+  const have=new Set(mine.map(i=>i["资料类型"]));
+  const es=$("niExistSeals"), pk=$("niPick");
+  if(es) es.innerHTML=mine.length?('已有：'+[...have].map(h=>'<span class="tag">'+esc(h)+'</span>').join("")):'<span class="muted">该公司无任何资料</span>';
+  if(!pk)return;
+  const opts=SEAL_TYPES.concat(["营业执照"]).filter(t=>!have.has(t));
+  pk.innerHTML=opts.length
+    ? '<span class="t">可补：</span>'+opts.map(t=>'<label class="chk"><input type="checkbox" class="niPick" value="'+t+'">'+t+'</label>').join("")
+    : '<span class="muted">该公司章证齐全，无需补章</span>';
+}
+async function niExec(){
+  const mode=($("niMode")||{}).value||"new";
+  const pos=($("niBsk")||{}).value||"";
+  if(!pos){toast("请选择入库筐",false);return;}
+  if(!OPERATOR)askOperator();
+  if(mode==="new"){
+    const name=($("niName").value||"").trim(), lp=($("niLP").value||"").trim();
+    if(!name){toast("请填写公司名称",false);return;}
+    if(!lp){toast("请填写法人",false);return;}
+    const seals=[...document.querySelectorAll(".niSeal:checked")].map(x=>x.value);
+    if(!seals.length&&!($("niLic")||{}).checked){toast("请至少勾选一项资料",false);return;}
+    const r=await api("/api/newco",{name,legalPerson:lp,family:($("niFam").value||"").trim(),
+      type:($("niType")||{}).value||"大陆",regTime:"",position:pos,seals,
+      license:($("niLic")||{}).checked,operator:OPERATOR||"二维"});
+    if(!r.ok){toast(r.msg,false);return;}
+    toast("已入库："+name+"（"+r.created.join("、")+"）",true);
+  }else{
+    const name=($("niCo")||{}).value||"";
+    const seals=[...document.querySelectorAll(".niPick:checked")].map(x=>x.value);
+    if(!seals.length){toast("请勾选要补的章",false);return;}
+    for(const s of seals){
+      const r=await api("/api/additem",{name,item:s,position:pos,operator:OPERATOR||"二维"});
+      if(!r.ok){toast(s+"："+(r.msg||"失败"),false);return;}
+    }
+    toast("已入库 "+seals.length+" 件（"+name+"）",true);
+  }
+  await reloadAll();
+  ui.tab="ops";render();
+}
+function switchOps(k){ui.ops=k;selCo.clear();render();}
+function clearSel(){sel[ui.ops].clear();selCo.clear();renderOpsList();}
+function opsFilterItems(){
+  // 出库：在库的章/执照；入库：在外部的；调拨：在库的
+  if(ui.ops==="out")return DB.items.filter(i=>i["状态"]===STAT_IN&&i["当前位置"]&&i["当前位置"]!=="待分配");
+  if(ui.ops==="in")return DB.items.filter(i=>i["状态"]===STAT_OUT);
+  return DB.items.filter(i=>i["状态"]===STAT_IN&&i["当前位置"]&&i["当前位置"]!=="待分配");
+}
+function renderOpsList(){
+  const pool=opsFilterItems();
+  const q=(($("opsQ").value)||"").trim().toLowerCase();
+  const cos=[...new Set(pool.map(i=>i["公司名称"]))].filter(n=>
+    !q||n.toLowerCase().includes(q)||pool.some(i=>i["公司名称"]===n&&
+      (String(i["法人"]||"").toLowerCase().includes(q)||String(i["家族"]||"").toLowerCase().includes(q))));
+  const cur=sel[ui.ops];
+  $("opsCount").textContent="已选 "+cur.size+" 件 / 显示 "+cos.length+" 家";
+  let h='<div class="scroll"><table><tr><th style="width:36px">选公司</th><th>公司</th><th>家族</th><th>法人</th><th>可操作资料</th></tr>';
+  cos.slice(0,200).forEach(n=>{
+    const its=pool.filter(i=>i["公司名称"]===n&&i["状态"]!==STAT_OFF);
+    if(!its.length)return;
+    const allSel=its.every(i=>cur.has(i["item_id"]));
+    h+='<tr><td><input type="checkbox" '+(allSel?"checked":"")+' onchange="toggleCo(\''+esc(n)+'\',this.checked)"></td>'
+      +'<td><b>'+esc(n)+'</b></td><td>'+esc(its[0]["家族"])+'</td><td>'+esc(its[0]["法人"])+'</td>'
+      +'<td><div class="seallist">'+its.map(i=>
+        '<label class="chk"><input type="checkbox" '+(cur.has(i["item_id"])?"checked":"")
+        +' onchange="toggleItem(\''+i["item_id"]+'\',this.checked)">'+esc(i["资料类型"])+'</label>').join("")+'</div></td></tr>';
+  });
+  if(!cos.length)h+='<tr><td colspan="5" class="muted">没有符合条件的公司</td></tr>';
+  $("opsList").innerHTML=h+'</table></div>';
+  renderOpsBar();
+}
+function toggleCo(name,on){
+  const pool=opsFilterItems();const cur=sel[ui.ops];
+  pool.filter(i=>i["公司名称"]===name&&i["状态"]!==STAT_OFF).forEach(i=>{
+    if(on)cur.add(i["item_id"]);else cur.delete(i["item_id"]);});
+  renderOpsList();
+}
+function toggleItem(id,on){
+  const cur=sel[ui.ops];
+  if(on)cur.add(id);else cur.delete(id);
+  renderOpsList();
+}
+function renderOpsBar(){
+  const cur=sel[ui.ops],n=cur.size;
+  let h='<div class="opbar"><div class="fg"><span class="t">已选 '+n+' 件</span></div>';
+  if(ui.ops==="out"){
+    const ps=DB.locations.filter(l=>l["类型"]==="人员").map(l=>l["名称"]);
+    h+='<div class="fg"><span class="t">领用人</span><select id="obDest">'+ps.map(p=>'<option>'+esc(p)+'</option>').join("")+'</select></div>';
+  }else{
+    const bs=DB.locations.filter(l=>l["类型"]==="位置").map(l=>l["名称"]);
+    h+='<div class="fg"><span class="t">目标筐</span><select id="obDest">'+bs.map(p=>'<option>'+esc(p)+'</option>').join("")+'</select></div>';
+  }
+  h+='<div class="fg"><span class="t">事由</span><input id="obWhy" style="width:200px" placeholder="选填"></div>';
+  if(ui.ops==="mv")h+='<div class="fg"><span class="t">新法人（选填）</span><input id="obLP" style="width:140px"></div>';
+  h+='<button '+(n?"":"disabled")+' onclick="execOps()">执行'+(ui.ops==="out"?"出库":ui.ops==="in"?"入库":"调拨")+'</button></div>';
+  $("opsBar").innerHTML=h;
+}
+async function execOps(){
+  const cur=sel[ui.ops],ids=[...cur];
+  if(!ids.length){toast("请先勾选资料",false);return;}
+  const dest=$("obDest").value,why=($("obWhy").value||"").trim();
+  const action=ui.ops==="out"?"出库":ui.ops==="in"?"入库":"调拨";
+  const destType=ui.ops==="out"?"人员":"位置";
+  if(!OPERATOR)askOperator();
+  let purpose=why;
+  if(ui.ops==="mv"){const lp=($("obLP").value||"").trim();if(lp)purpose=(why?why+"；":"")+"法人变更："+lp;}
+  const r=await api("/api/move",{item_ids:ids,action,dest_name:dest,dest_type:destType,
+    operator:OPERATOR||"二维",purpose,date:todayStr()});
+  if(!r.ok){toast(r.msg,false);return;}
+  cur.clear();selCo.clear();
+  toast(r.detail||("已"+action),true);await reloadAll();
+}
+function renderLedger(){
+  const mvs=DB.movements.slice().reverse().slice(0,100);
+  let h='<div class="scroll"><table><tr><th>时间</th><th>公司</th><th>资料</th><th>动作</th><th>流向</th><th>操作人</th><th>事由</th></tr>';
+  mvs.forEach(m=>{h+='<tr><td class="mini">'+esc(m["时间"])+'</td><td>'+esc(m["公司名称"])+'</td>'
+    +'<td>'+esc(m["资料类型"])+'</td><td><span class="tag">'+esc(m["动作"])+'</span></td>'
+    +'<td>'+esc(m["起点名称"]||"—")+' → <span class="badge '+(m["终点类型"]==="人员"?"b-purple":"b-blue")+'">'+esc(m["终点名称"]||"—")+'</span></td>'
+    +'<td>'+esc(m["操作人"])+'</td><td>'+esc(m["事由"])+'</td></tr>';});
+  if(!mvs.length)h+='<tr><td colspan="7" class="muted">暂无记录</td></tr>';
+  $("ledger").innerHTML=h+'</table></div>';
+}
+
+/* ============ 流转轨迹 ============ */
+function renderTrace(m){
+  m.innerHTML='<div class="card"><h2 class="sec">资料流转轨迹</h2><div class="toolbar">'
+    +'<input id="tq" value="'+esc(ui.traceQ)+'" placeholder="公司名 / 章类型 / item_id / 操作人" style="width:320px" oninput="ui.traceQ=this.value;renderTraceList()">'
+    +'<span class="spacer"></span><span id="tc" class="mini"></span></div><div id="tList"></div></div>'
+    +'<div class="card"><h2 class="sec">流向汇总</h2><div id="tSum"></div></div>';
+  renderTraceList();renderTraceSum();
+}
+function renderTraceList(){
+  const q=(ui.traceQ||"").trim().toLowerCase();
+  let mvs=DB.movements.slice().reverse();
+  if(q)mvs=mvs.filter(m=>[m["公司名称"],m["资料类型"],m["item_id"],m["操作人"],m["终点名称"],m["起点名称"]]
+    .some(v=>String(v||"").toLowerCase().includes(q)));
+  $("tc").textContent="共 "+mvs.length+" 条";
+  let h='<div class="scroll"><table><tr><th>时间</th><th>公司</th><th>资料</th><th>动作</th><th>流向</th><th>操作人</th><th>事由</th><th></th></tr>';
+  mvs.slice(0,300).forEach(m=>{h+='<tr><td class="mini">'+esc(m["时间"])+'</td><td>'+esc(m["公司名称"])+'</td>'
+    +'<td>'+esc(m["资料类型"])+'</td><td><span class="tag">'+esc(m["动作"])+'</span></td>'
+    +'<td>'+esc(m["起点名称"]||"—")+' → '+esc(m["终点名称"]||"—")+'</td>'
+    +'<td>'+esc(m["操作人"])+'</td><td>'+esc(m["事由"])+'</td>'
+    +'<td>'+(m["item_id"]?'<button class="sm ghost" onclick="itemDetail(\''+m["item_id"]+'\')">详情</button>':'')+'</td></tr>';});
+  if(!mvs.length)h+='<tr><td colspan="8" class="muted">暂无记录</td></tr>';
+  $("tList").innerHTML=h+'</table></div>';
+}
+function renderTraceSum(){
+  const byP={};DB.items.filter(i=>i["状态"]===STAT_OUT).forEach(i=>{
+    const p=i["持有人"]||i["当前位置"]||"未知";byP[p]=byP[p]||{n:0,cos:new Set()};
+    byP[p].n++;byP[p].cos.add(i["公司名称"]);});
+  let h='<h4>人员持有</h4><table><tr><th>人员</th><th>持有件数</th><th>涉及公司</th></tr>';
+  const pk=Object.keys(byP);
+  if(!pk.length)h+='<tr><td colspan="3" class="muted">当前无外部持有</td></tr>';
+  pk.forEach(p=>h+='<tr><td><b>'+esc(p)+'</b></td><td>'+byP[p].n+'</td><td>'+byP[p].cos.size+' 家</td></tr>');
+  h+='</table><h4>位置存放</h4><div class="scroll"><table><tr><th>位置</th><th>件数</th><th>涉及公司</th></tr>';
+  const byL={};DB.items.filter(i=>i["状态"]===STAT_IN&&i["当前位置"]&&i["当前位置"]!=="待分配").forEach(i=>{
+    const l=i["当前位置"];byL[l]=byL[l]||{n:0,cos:new Set()};byL[l].n++;byL[l].cos.add(i["公司名称"]);});
+  Object.keys(byL).sort().forEach(l=>h+='<tr><td><b>'+esc(l)+'</b></td><td>'+byL[l].n+'</td><td>'+byL[l].cos.size+' 家</td></tr>');
+  $("tSum").innerHTML=h+'</table></div>';
+}
+
+/* ============ 盘点导出（矩阵式：一行一家公司）============ */
+const INV_SEAL=["公章","法人章","财务章","合同章","发票章"];
+const INV_LIC=["营业执照"];
+function invCols(){
+  const k=ui.invKind||"全部";
+  if(k==="章")return INV_SEAL.slice();
+  if(k==="执照")return INV_LIC.slice();
+  return INV_SEAL.concat(INV_LIC);
+}
+/* ---- 位置：柜子→排→位 排序；显示名＝柜子-筐名 ---- */
+function invBaskets(){
+  const ord={};DB.cabinets.forEach((c,i)=>{ord[c.name]=i;});
+  const bs=DB.locations.filter(l=>l["类型"]==="位置"&&l["名称"]);
+  bs.sort((a,b)=>{
+    const ca=ord[a["柜子"]]===undefined?999:ord[a["柜子"]];
+    const cb=ord[b["柜子"]]===undefined?999:ord[b["柜子"]];
+    if(ca!==cb)return ca-cb;
+    const ra=parseInt(a["排"]||99,10),rb=parseInt(b["排"]||99,10);
+    if(ra!==rb)return ra-rb;
+    return parseInt(a["位"]||99,10)-parseInt(b["位"]||99,10);
+  });
+  return bs.map(l=>({name:l["名称"],cab:l["柜子"]||"",
+    label:(l["柜子"]?l["柜子"]+"-":"")+l["名称"]}));
+}
+function invSelected(){                        // 选中的筐（按 柜子→筐 原顺序）
+  const all=invBaskets();
+  if(ui.invAll)return all;
+  return all.filter(b=>ui.invSel.has(b.name));
+}
+function invHas(n){return ui.invAll?true:ui.invSel.has(n);}
+function invMaterialize(){                     // 从"全部"切到自定义：先把全部写进集合
+  if(!ui.invAll)return;
+  ui.invSel=new Set(invBaskets().map(b=>b.name));
+  ui.invAll=false;
+}
+function invToggle(name,on){
+  invMaterialize();
+  if(on)ui.invSel.add(name);else ui.invSel.delete(name);
+  invRefresh();
+}
+function invToggleCab(cab,on){
+  invMaterialize();
+  invBaskets().filter(b=>b.cab===cab).forEach(b=>{if(on)ui.invSel.add(b.name);else ui.invSel.delete(b.name);});
+  invRefresh();
+}
+function invCheckAll(){ui.invAll=true;ui.invSel=new Set();invRefresh();}
+function invCheckNone(){ui.invAll=false;ui.invSel=new Set();invRefresh();}
+function invPickHtml(){
+  const byCab={},cabs=[];
+  invBaskets().forEach(b=>{if(!byCab[b.cab]){byCab[b.cab]=[];cabs.push(b.cab);}byCab[b.cab].push(b);});
+  return cabs.map(c=>{
+    const list=byCab[c],on=list.filter(b=>invHas(b.name)).length;
+    const st=on===0?0:(on===list.length?2:1);   // 0未选 1半选 2全选
+    return '<div style="margin:2px 0"><label class="chk"><input type="checkbox" '
+      +(st?"checked":"")+(st===1?' data-half="1"':'')
+      +' onclick="invToggleCab(\''+esc(c)+'\',this.checked)"><b>'+esc(c||"未归柜")+'</b></label>'
+      +'<div class="seallist">'+list.map(b=>'<label class="chk"><input type="checkbox" '
+      +(invHas(b.name)?"checked":"")+' onclick="invToggle(\''+esc(b.name)
+      +'\',this.checked)">'+esc(b.label)+'</label>').join("")+'</div></div>';
+  }).join("");
+}
+function invRefresh(){
+  const p=$("invPick");
+  if(p){p.innerHTML=invPickHtml();
+    p.querySelectorAll('input[data-half="1"]').forEach(x=>{x.indeterminate=true;});}
+  const s=$("invSum");
+  if(s)s.innerHTML=invSumHtml();
+  renderInvTable();
+}
+function invSumHtml(){
+  const s=invSelected(),n=s.length;
+  if(!n)return '<b style="color:#b42318">未选任何筐 —— 请勾选要盘点的柜子或筐</b>';
+  const tail=n>4?" 等 "+n+" 个筐":(n>1?" 共 "+n+" 个筐":"");
+  return "<b>已选 "+n+" 个筐</b>　<span class=\"mini\">"+esc(s.slice(0,4).map(b=>b.label).join("、"))+esc(tail)+"</span>";
+}
+function invInScope(i){                        // 是否算"在本次盘点范围内"
+  if(i["状态"]===STAT_OFF)return false;
+  const p=i["当前位置"];
+  if(!p||p==="待分配")return false;
+  return ui.invAll?true:ui.invSel.has(p);
+}
+function invWhere(i){                         // 不在盘点范围的章 → 写实际位置
+  if(i["状态"]===STAT_OFF)return "已缴销";
+  if(i["状态"]===STAT_OUT)return (i["持有人"]||i["当前位置"]||"外部")+"处";
+  const p=i["当前位置"]||"";
+  if(!p||p==="待分配")return "";              // 还没上架的（如执照）不写进第二行，避免每家都多一行
+  return p;
+}
+function invTitle(){                          // 表格/文件名用
+  const all=invBaskets(),s=invSelected();
+  if(!s.length)return "未选位置";
+  if(ui.invAll||s.length>=all.length)return "全部位置";
+  const cabs=[...new Set(s.map(b=>b.cab).filter(Boolean))];
+  if(cabs.length===1&&s.length===all.filter(b=>b.cab===cabs[0]).length)return cabs[0];  // 整柜
+  if(s.length<=3)return s.map(b=>b.label).join("+");                                    // 少量筐 → 柜名-筐名
+  if(cabs.length===1)return cabs[0]+"（部分）";                                          // 单柜选了一部分
+  if(cabs.length<=3)return cabs.join("+");                                              // 多筐 → 柜名拼接
+  return "部分位置";
+}
+function invMatrix(){
+  const cols=invCols(),kind=ui.invKind||"全部";
+  const pool=DB.items.filter(i=>kind==="全部"||i["资料类别"]===kind);
+  const inItems=pool.filter(invInScope);
+  const dict={};                              // 筐名 → Set(公司)
+  inItems.forEach(i=>{(dict[i["当前位置"]]=dict[i["当前位置"]]||new Set()).add(i["公司名称"]);});
+  const rows=[];
+  invSelected().forEach(b=>{
+    [...(dict[b.name]||[])].sort((x,y)=>String(x).localeCompare(String(y),"zh"))
+      .forEach(co=>rows.push({co:co,basket:b}));
+  });
+  rows.forEach((r,idx)=>{
+    const mine=pool.filter(i=>i["公司名称"]===r.co);
+    const line1=cols.map(t=>{
+      const n=inItems.filter(i=>i["公司名称"]===r.co&&i["资料类型"]===t&&i["当前位置"]===r.basket.name).length;
+      return n>1?"✓×"+n:(n?"✓":"无");
+    });
+    const line2=cols.map(t=>{
+      const arr=mine.filter(i=>i["资料类型"]===t&&!invInScope(i));
+      if(!arr.length)return "";
+      const m={};
+      arr.forEach(i=>{const k=invWhere(i);if(k)m[k]=(m[k]||0)+1;});
+      return Object.keys(m).map(k=>m[k]>1?k+"×"+m[k]:k).join("、");
+    });
+    r.no=idx+1;
+    r.cab=r.basket.cab||"—";
+    r.bk=r.basket.label;
+    r.show=esc(r.co);
+    r.lines=line2.some(x=>x)?[line1,line2]:[line1];
+  });
+  return {cols,groups:rows};
+}
+function invRows(){                            // 旧的"一行一枚章"明细（导出明细 CSV 用）
+  const ord={};invBaskets().forEach((b,i)=>{ord[b.name]=i;});
+  let l=DB.items.filter(i=>i["状态"]!==STAT_OFF&&invInScope(i));
+  if(ui.invKind!=="全部")l=l.filter(i=>i["资料类别"]===ui.invKind);
+  l.sort((a,b)=>{
+    const pa=ord[a["当前位置"]]===undefined?999:ord[a["当前位置"]];
+    const pb=ord[b["当前位置"]]===undefined?999:ord[b["当前位置"]];
+    return pa-pb||String(a["公司名称"]).localeCompare(String(b["公司名称"]),"zh");
+  });
+  return l;
+}
+function renderInv(m){
+  m.innerHTML='<div class="card"><h2 class="sec">按位置生成盘点表（一行一家公司）</h2>'
+    +'<div class="toolbar"><b style="font-size:13px">盘点范围</b>'
+    +'<button class="ghost" onclick="invCheckAll()">全部</button>'
+    +'<button class="ghost" onclick="invCheckNone()">清空</button>'
+    +'<select onchange="ui.invKind=this.value;renderInvTable()">'
+    +['全部','章','执照'].map(k=>'<option'+(ui.invKind===k?" selected":"")+'>'+k+'</option>').join("")+'</select>'
+    +'<span class="spacer"></span><button onclick="exportInvXlsx()">导出 Excel</button>'
+    +'<button class="ghost" onclick="exportInvCSV()">导出明细 CSV</button>'
+    +'<button class="ghost" onclick="printInv()">打印</button></div>'
+    +'<div class="scroll" style="max-height:230px;padding:6px 12px"><div id="invPick"></div></div>'
+    +'<div class="toolbar" style="margin-top:6px"><div id="invSum"></div></div>'
+    +'<p class="mini">勾柜子＝整柜全选（可展开单独取消筐）。第一行＝该筐里实际有的章：<b>✓</b>（✓×2 = 2 枚）、'
+    +'<b>无</b>＝没有或不在该筐；第二行（有才显示）＝不在本次范围的章的实际位置，如 <b>向向处</b>、'
+    +'<b>柜二-精灵02</b>、<b>已缴销</b>；未上架的（待分配）不列出。</p>'
+    +'<div id="invTable"></div></div>';
+  invRefresh();
+}
+function invFrom(name){ui.invSel=new Set([name]);ui.invAll=false;ui.tab="inv";render();}
+function renderInvTable(){
+  const box=$("invTable");if(!box)return;
+  const {cols,groups}=invMatrix();
+  const nrow=groups.reduce((s,g)=>s+g.lines.length,0);
+  const sels=invSelected().length;
+  let h='<div class="toolbar"><b>'+esc(invTitle())+' — '+sels+' 个筐 / '+groups.length+' 行'
+    +'</b><span class="mini">'+nowStr()+'</span></div>';
+  if(!sels){box.innerHTML=h+'<div class="muted" style="padding:14px">请先在上方勾选要盘点的柜子或筐。</div>';return;}
+  h+='<div class="scroll"><table><tr><th>序号</th><th>柜子</th><th>筐</th><th>公司</th>'
+    +cols.map(c=>'<th>'+esc(c)+'</th>').join("")+'<th>实际核对</th></tr>';
+  if(!groups.length)h+='<tr><td colspan="'+(cols.length+5)+'" class="muted">该范围暂无资料</td></tr>';
+  groups.forEach(g=>{
+    const rs=g.lines.length>1?' rowspan="'+g.lines.length+'"':"";
+    g.lines.forEach((line,li)=>{
+      h+='<tr>';
+      if(li===0)h+='<td'+rs+'>'+g.no+'</td><td'+rs+'>'+esc(g.cab)+'</td><td'+rs+'>'+esc(g.bk)+'</td><td'+rs+'>'+g.show+'</td>';
+      line.forEach(v=>h+='<td class="'+(v==="无"||v==="已缴销"?"muted":"")+'">'+esc(v)+'</td>');
+      h+='<td></td></tr>';
+    });
+  });
+  box.innerHTML=h+'</table></div>';
+}
+function csvEsc(v){const s=String(v==null?"":v);return /[",\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;}
+function invExportGuard(groups,sels){
+  if(!sels){toast("请先勾选要盘点的柜子或筐",false);return false;}
+  if(!groups.length){toast("该范围暂无资料",false);return false;}
+  return true;
+}
+async function exportInvXlsx(){
+  const {cols,groups}=invMatrix();
+  if(!invExportGuard(groups,invSelected().length))return;
+  const title=invTitle()+"-盘点表-"+todayStr();
+  try{
+    const payload={title:title,header:["序号","柜子","筐","公司"].concat(cols).concat(["实际核对"]),
+      groups:groups.map(g=>({no:g.no,co:g.co,lead:[g.cab,g.bk],lines:g.lines}))};
+    const r=await fetch("/api/invxlsx",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify(payload)});
+    if(!r.ok){toast("导出失败（服务器可能缺少 openpyxl）",false);return;}
+    const blob=await r.blob();
+    const a=document.createElement("a");a.href=URL.createObjectURL(blob);
+    a.download=title+".xlsx";a.click();
+    toast("已导出 "+title+".xlsx",true);
+  }catch(e){toast("导出失败："+e,false);}
+}
+function exportInvCSV(){
+  const l=invRows();
+  if(!invSelected().length){toast("请先勾选要盘点的柜子或筐",false);return;}
+  if(!l.length){toast("该范围暂无资料",false);return;}
+  const cabmap={};invBaskets().forEach(b=>{cabmap[b.name]=b.cab||"";});
+  const rows=[["序号","柜子","筐","公司","家族","资料类型","账面状态","去向","实际核对"]];
+  l.forEach((i,n)=>rows.push([n+1,cabmap[i["当前位置"]]||"",i["当前位置"]||"",
+    i["公司名称"],i["家族"],i["资料类型"],
+    i["状态"],i["状态"]===STAT_OUT?(i["持有人"]||""):"",""]));
+  const csv="\ufeff"+rows.map(r=>r.map(csvEsc).join(",")).join("\r\n");
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"}));
+  a.download=invTitle()+"-盘点明细.csv";a.click();
+  toast("已导出 "+l.length+" 件明细",true);
+}
+function printInv(){
+  const {cols,groups}=invMatrix();
+  if(!invExportGuard(groups,invSelected().length))return;
+  const nrow=groups.reduce((s,g)=>s+g.lines.length,0);
+  let h='<h2 style="font-size:16px">'+esc(invTitle())+' 盘点表（'+invSelected().length+' 个筐 / '
+    +groups.length+' 家公司 / '+nrow+' 行）　'+nowStr()+'</h2>'
+    +'<table><tr><th>序号</th><th>柜子</th><th>筐</th><th>公司</th>'+cols.map(c=>'<th>'+esc(c)+'</th>').join("")+'<th>实际核对</th></tr>';
+  groups.forEach(g=>{
+    const rs=g.lines.length>1?' rowspan="'+g.lines.length+'"':"";
+    g.lines.forEach((line,li)=>{
+      h+='<tr>';
+      if(li===0)h+='<td'+rs+'>'+g.no+'</td><td'+rs+'>'+esc(g.cab)+'</td><td'+rs+'>'+esc(g.bk)+'</td><td'+rs+'>'+g.show+'</td>';
+      line.forEach(v=>h+='<td>'+esc(v)+'</td>');
+      h+='<td></td></tr>';
+    });
+  });
+  $("printArea").innerHTML=h+'</table>';window.print();
+}
+
+/* ============ 数据管理 ============ */
+function renderData(m){
+  let h='<div class="card"><h2 class="sec">数据文件</h2><div class="toolbar">'
+    +'<button class="ghost" onclick="dl(\'items\')">下载 items.csv</button>'
+    +'<button class="ghost" onclick="dl(\'locations\')">下载 locations.csv</button>'
+    +'<button class="ghost" onclick="dl(\'movements\')">下载 movements.csv</button></div></div>';
+  h+='<div class="card"><h2 class="sec">操作人</h2><div class="frow">'
+    +'<div class="fg"><span class="t">当前操作人（记录在留痕中）</span><input id="opName" value="'+esc(OPERATOR)+'"></div>'
+    +'<button onclick="saveOp()">保存</button></div></div>';
+  h+='<div class="card"><h2 class="sec">新增公司（新注册入库）</h2>'
+    +'<div class="frow"><div class="fg"><span class="t">公司名称 *</span><input id="ncName" style="width:260px"></div>'
+    +'<div class="fg"><span class="t">法人 *</span><input id="ncLP"></div>'
+    +'<div class="fg"><span class="t">家族</span><input id="ncFam"></div>'
+    +'<div class="fg"><span class="t">类型</span><select id="ncType"><option>大陆</option><option>国外</option></select></div>'
+    +'<div class="fg"><span class="t">注册时间</span><input type="date" id="ncReg"></div></div>'
+    +'<div class="frow"><div class="fg"><span class="t">存放筐</span><select id="ncBsk">'
+    +DB.locations.filter(l=>l["类型"]==="位置").map(l=>'<option>'+esc(l["名称"])+'</option>').join("")+'</select></div>'
+    +'<span class="t" style="width:100%">章（勾选已刻的）：</span>'
+    +SEAL_TYPES.map(s=>'<label class="chk"><input type="checkbox" class="ncSeal" value="'+s+'">'+s+'</label>').join("")
+    +'<label class="chk"><input type="checkbox" id="ncLic" checked>营业执照</label></div>'
+    +'<div style="margin-top:8px"><button onclick="doNewCo()">保存新公司</button></div></div>';
+  h+='<div class="card"><h2 class="sec">批量导入新公司</h2>'
+    +'<div class="tip">从 Excel 复制粘贴，列顺序：<b>类型 · 注册时间 · 家族 · 公司名称 · 法人 · 公章 · 法人章 · 财务章 · 合同章 · 发票章 · 筐号</b>（章列填 1/0）</div>'
+    +'<textarea id="impText" style="width:100%;height:140px" placeholder="粘贴 Excel 数据…"></textarea>'
+    +'<div style="margin-top:8px"><button onclick="doImport()">解析并导入</button></div></div>';
+  m.innerHTML=h;
+}
+function saveOp(){OPERATOR=($("opName").value||"").trim();localStorage.setItem("seal_operator",OPERATOR);syncHeader();toast("已保存",true);}
+function dl(n){window.open("/api/export/"+n,"_blank");}
+async function doNewCo(){
+  const name=($("ncName").value||"").trim(),lp=($("ncLP").value||"").trim();
+  if(!name){toast("请填写公司名称",false);return;}
+  if(!lp){toast("请填写法人",false);return;}
+  const seals=[...document.querySelectorAll(".ncSeal:checked")].map(x=>x.value);
+  const r=await api("/api/newco",{name,legalPerson:lp,family:($("ncFam").value||"").trim(),
+    type:$("ncType").value,regTime:$("ncReg").value||"",position:$("ncBsk").value,
+    seals,license:$("ncLic").checked,operator:OPERATOR||"二维"});
+  if(!r.ok){toast(r.msg,false);return;}
+  toast("已新增公司 "+name,true);await reloadAll();
+}
+async function doImport(){
+  const txt=($("impText").value||"").trim();
+  if(!txt){toast("请粘贴数据",false);return;}
+  const lines=txt.split(/[\r\n]+/).map(l=>l.trim()).filter(Boolean);
+  let st=0;if(/类型|公司名称/.test(lines[0]||""))st=1;
+  const rows=[];
+  for(let i=st;i<lines.length;i++){
+    const c=lines[i].split(/\t|,/).map(s=>s.trim());
+    if(c.length<5)continue;
+    rows.push({type:c[0]||"大陆",regTime:c[1]||"",family:c[2]||"",name:c[3]||"",legalPerson:c[4]||"",
+      公章:c[5]||"0",法人章:c[6]||"0",财务章:c[7]||"0",合同章:c[8]||"0",发票章:c[9]||"0",position:c[10]||""});
+  }
+  if(!rows.length){toast("无有效数据",false);return;}
+  const r=await api("/api/batchimp",{rows,operator:OPERATOR||"二维"});
+  if(!r.ok){toast(r.msg,false);return;}
+  toast("已导入 "+r.created.length+" 件"+(r.skipped.length?"，跳过 "+r.skipped.length+" 件（已存在）":""),true);
+  $("impText").value="";await reloadAll();
+}
+
+/* ============ 弹窗 ============ */
+function openModal(h){$("modalBox").innerHTML=h;$("modalMask").classList.add("show");}
+function closeModal(){$("modalMask").classList.remove("show");}
+
+/* ============ boot ============ */
+window.addEventListener("DOMContentLoaded",async()=>{
+  if(!OPERATOR&&isAdmin())OPERATOR="二维";
+  await reloadAll();
+});
+</script>
+</body>
+</html>
