@@ -105,6 +105,18 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:#1f6feb;box-sh
 <div id="printArea"></div>
 <div id="msgHost" class="msg"></div>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script>
+/* ============ Supabase 配置（仅 publishable/anon key，绝不放入 service_role/PAT） ============ */
+var SB_URL="https://qixhrmxamweliwvcgnkp.supabase.co";
+var SB_ANON="sb_publishable_00sH4JOarPJ85AXe8TdMiw_FoWQRvqS";
+var ITEMS_HEADERS=["item_id","公司名称","家族","法人","公司类型","注册时间","资料类型","资料类别","当前位置ID","当前位置","当前位置类型","状态","持有人","出库时间","更新时间","备注"];
+var LOCS_HEADERS=["id","名称","类型","柜子","排","位","关联家族","负责人","备注"];
+var MOVS_HEADERS=["事件ID","时间","item_id","公司名称","资料类型","动作","起点ID","起点名称","起点类型","终点ID","终点名称","终点类型","操作人","事由","备注"];
+var ACCOUNT_MAP={"JMYZZMASTER":"jmyzzmaster@wenwen014.local","JMYZZ":"jmyzz@wenwen014.local"};
+var sb=(window.supabase&&window.supabase.createClient)?window.supabase.createClient(SB_URL,SB_ANON):null;
+</script>
 <script>
 /* ============ 状态 ============ */
 let DB={items:[],locations:[],movements:[],cabinets:[],families:[]};
@@ -112,7 +124,7 @@ let ui={tab:"dash",q:"",qType:"全部",qStatus:"全部",ops:"out",invAll:true,in
 let sel={out:new Set(),in:new Set(),mv:new Set()};   // 三个 Tab 各自勾选的 item_id
 let selCo=new Set();                                  // 已展开的公司
 let AUTH={token:localStorage.getItem("seal_token")||"",user:localStorage.getItem("seal_user")||"",
-          ts:parseInt(localStorage.getItem("seal_ts")||"0",10)};
+          ts:parseInt(localStorage.getItem("seal_ts")||"0",10),role:localStorage.getItem("seal_role")||""};
 let OPERATOR=localStorage.getItem("seal_operator")||"";
 const SEAL_TYPES=["公章","法人章","财务章","合同章","发票章"];
 const STAT_IN="在库",STAT_OUT="在外部",STAT_OFF="已缴销";
@@ -126,10 +138,7 @@ function todayStr(){return nowStr().slice(0,10);}
 function toast(t,ok){const h=$("msgHost");const d=document.createElement("div");
   d.textContent=t;if(ok===false)d.className="err";h.appendChild(d);setTimeout(()=>d.remove(),3200);}
 function isAdmin(){
-  if(!AUTH.token) return false;
-  const days=(Date.now()-AUTH.ts)/86400000;
-  if(days>7){ localStorage.removeItem("seal_token"); AUTH.token=""; return false; }
-  return true;
+  return AUTH.role==="master";
 }
 function statusBadge(it){
   if(it["状态"]===STAT_OFF)return'<span class="badge b-off">已缴销</span>';
@@ -141,16 +150,382 @@ function posTag(it){const t=it["当前位置类型"];
   return'<span class="badge '+(t==="人员"?"b-purple":"b-blue")+'">'+esc(it["当前位置"]||"—")+'</span>';}
 
 /* ============ API ============ */
+/* ============ API（直连 Supabase，RLS 负责鉴权） ============ */
 async function api(path,body){
-  if(body&&isAdmin()&&body.token===undefined) body.token=AUTH.token;
-  const opt={method:body?"POST":"GET",headers:{"Content-Type":"application/json"}};
-  if(body)opt.body=JSON.stringify(body);
-  const r=await fetch(path,opt);
-  const j=await r.json().catch(()=>({ok:false,msg:"响应解析失败"}));
-  if(j&&j.ok===false&&/未登录|过期/.test(j.msg||"")){
-    localStorage.removeItem("seal_token");AUTH.token="";syncHeader();render();
+  try{
+    switch(path){
+      case "/api/load":       return await loadAll();
+      case "/api/move":       return await opMove(body);
+      case "/api/assignpos":  return await opMove(Object.assign({},body,{action:"调拨",dest_type:"位置",purpose:body.purpose||"批量分配位置",date:body.date||todayStr()}));
+      case "/api/savelayout": return await opSaveLayout(body);
+      case "/api/newco":      return await opNewCo(body);
+      case "/api/additem":    return await opAddItem(body);
+      case "/api/edititem":   return await opEditItem(body);
+      case "/api/delitem":    return await opDelItem(body);
+      case "/api/delco":      return await opDelCo(body);
+      case "/api/addloc":     return await opAddLoc(body);
+      case "/api/delloc":     return await opDelLoc(body);
+      case "/api/delcab":     return await opDelCab(body);
+      case "/api/renameloc":  return await opRenameLoc(body);
+      case "/api/batchimp":   return await opBatchImp(body);
+      case "/api/login":      return {ok:true};
+      case "/api/logout":     return {ok:true};
+      default: return {ok:false,msg:"未知接口："+path};
+    }
+  }catch(e){ return {ok:false,msg:(e&&e.message)||String(e)}; }
+}
+function errMsg(e){ return (e&&(e.message||e.error_description||e.hint))||"操作失败"; }
+async function sbGet(table,cols){
+  const {data,error}=await sb.from(table).select(cols||"*");
+  if(error) throw new Error(errMsg(error));
+  return data||[];
+}
+async function fetchAll(table){
+  if(!sb) return [];
+  let all=[],from=0,size=1000;
+  while(true){
+    const {data,error}=await sb.from(table).select("*").range(from,from+size-1);
+    if(error) throw new Error(errMsg(error));
+    all=all.concat(data||[]);
+    if(!data||data.length<size) break;
+    from+=size;
   }
-  return j;
+  return all;
+}
+function nextLocId(){
+  let n=1;
+  (DB.locations||[]).forEach(l=>{const m=/^L(\d+)$/.exec(l["id"]||"");if(m)n=Math.max(n,parseInt(m[1],10)+1);});
+  return "L"+String(n).padStart(3,"0");
+}
+function nextItemId(){
+  let n=1;
+  (DB.items||[]).forEach(i=>{const m=/^I(\d+)$/.exec(i["item_id"]||"");if(m)n=Math.max(n,parseInt(m[1],10)+1);});
+  return "I"+String(n).padStart(4,"0");
+}
+let _evtSeq=0;
+function movRow(o){
+  _evtSeq++;
+  var _rnd=Math.random().toString(36).slice(2,6).toUpperCase();
+  return Object.assign({"事件ID":"M"+Date.now()+"_"+_evtSeq+"_"+_rnd,"时间":nowStr(),"item_id":"","公司名称":"",
+    "资料类型":"","动作":"","起点ID":"","起点名称":"","起点类型":"","终点ID":"","终点名称":"",
+    "终点类型":"","操作人":OPERATOR||"","事由":"","备注":""},o);
+}
+async function ensureLoc(name,type,operator){
+  if(!name) return "";
+  const {data,error}=await sb.from("locations").select("*").eq("名称",name).eq("类型",type);
+  if(error) throw new Error(errMsg(error));
+  if(data&&data.length) return data[0]["id"];
+  const id=nextLocId();
+  const row={"id":id,"名称":name,"类型":type,"柜子":"","排":"","位":"","关联家族":"","负责人":"","备注":(type==="人员"?"外部人员":"")};
+  const {error:e2}=await sb.from("locations").insert(row);
+  if(e2) throw new Error(errMsg(e2));
+  DB.locations.push(row);
+  return id;
+}
+async function loadAll(){
+  if(!sb) return {ok:false,msg:"Supabase 未加载，请检查网络后刷新"};
+  const s=await sb.auth.getSession();
+  if(!s||!s.data||!s.data.session) return {ok:false,msg:"请先登录后再查看数据"};
+  const items=await fetchAll("items");
+  const locations=await fetchAll("locations");
+  const movements=await fetchAll("movements");
+  const cab_names=[...new Set(locations.filter(l=>l["类型"]==="柜子"&&l["名称"]).map(l=>l["名称"]))].sort((a,b)=>a.localeCompare(b,"zh"));
+  const cabinets=cab_names.map(c=>({name:c,rows:ROWS_PER_CAB,cols:COLS_PER_ROW}));
+  const families=[...new Set(items.filter(i=>i["家族"]).map(i=>i["家族"]))].sort((a,b)=>a.localeCompare(b,"zh"));
+  return {ok:true,items,locations,movements,cabinets,families};
+}
+async function opMove(body){
+  const item_ids=body.item_ids||[];
+  const action=body.action||"";
+  const dest_name=(body.dest_name||"").trim();
+  const dest_type=body.dest_type||"位置";
+  const operator=(body.operator||"").trim()||"二维";
+  const purpose=(body.purpose||"").trim();
+  const date=body.date||todayStr();
+  if(!item_ids.length) return {ok:false,msg:"请选择资料"};
+  if(!action) return {ok:false,msg:"请指定动作"};
+  if(!dest_name) return {ok:false,msg:"请指定目标位置/人员"};
+  const items=(await sbGet("items")).filter(i=>item_ids.includes(i["item_id"]));
+  if(!items.length) return {ok:false,msg:"没有匹配的资料"};
+  const dest_id=await ensureLoc(dest_name,dest_type,operator);
+  const common={};
+  common["当前位置ID"]=dest_id;common["当前位置"]=dest_name;common["当前位置类型"]=dest_type;
+  if(action==="出库"){common["状态"]=STAT_OUT;common["持有人"]=dest_name;common["出库时间"]=date;}
+  else if(action==="入库"||action==="调拨"){common["状态"]=STAT_IN;common["持有人"]="";common["出库时间"]="";}
+  else if(action==="缴销"){common["状态"]=STAT_OFF;common["持有人"]="";common["出库时间"]="";}
+  common["更新时间"]=nowStr();
+  if(purpose) common["备注"]=purpose;
+  const {error:ue}=await sb.from("items").update(common).in("item_id",item_ids);
+  if(ue) return {ok:false,msg:errMsg(ue)};
+  const movements=items.map(i=>{
+    const src_id=i["当前位置ID"],src_name=i["当前位置"],src_type=i["当前位置类型"]||"位置";
+    return movRow({item_id:i["item_id"],公司名称:i["公司名称"],资料类型:i["资料类型"],动作:action,
+      起点ID:src_id,起点名称:src_name,起点类型:src_type,终点ID:dest_id,终点名称:dest_name,终点类型:dest_type,操作人:operator,事由:purpose});
+  });
+  if(movements.length){const {error:me}=await sb.from("movements").insert(movements);if(me) return {ok:false,msg:errMsg(me)};}
+  return {ok:true,moved:movements.length,detail:movements.length+" 件："+action+" → "+dest_name};
+}
+async function opSaveLayout(body){
+  const baskets=body.baskets||[];
+  const operator=(body.operator||"").trim()||"二维";
+  if(!baskets.length) return {ok:false,msg:"无布局数据"};
+  const changes=[];
+  for(const b of baskets){
+    const nm=(b.名称||b.name||"").trim(); if(!nm) continue;
+    const loc=DB.locations.find(l=>l["名称"]===nm); if(!loc) continue;
+    const new_cab=(b.柜子||b.cabinet||loc["柜子"]||"").trim();
+    const new_row=String(b.排||b.row||"").trim();
+    const new_col=String(b.位||b.col||"").trim();
+    if((loc["柜子"]||"")!==new_cab||(loc["排"]||"")!==new_row||(loc["位"]||"")!==new_col){
+      const old=loc["柜子"]+loc["排"]+"排"+loc["位"]+"位";
+      loc["柜子"]=new_cab;loc["排"]=new_row;loc["位"]=new_col;
+      changes.push(nm+"："+old+" → "+new_cab+new_row+"排"+new_col+"位");
+      const {error}=await sb.from("locations").update({柜子:new_cab,排:new_row,位:new_col}).eq("名称",nm);
+      if(error) return {ok:false,msg:errMsg(error)};
+    }
+  }
+  if(!changes.length) return {ok:true,changed:0};
+  const m=movRow({动作:"柜子布局调整",操作人:operator,事由:changes.join("；")});
+  const {error:me}=await sb.from("movements").insert(m);
+  if(me) return {ok:false,msg:errMsg(me)};
+  return {ok:true,changed:changes.length,detail:changes};
+}
+async function opNewCo(body){
+  const name=(body.name||"").trim();
+  const legal=(body.legalPerson||"").trim();
+  const family=(body.family||"").trim();
+  const ctype=body.type||"大陆";
+  const reg=body.regTime||"";
+  const position=(body.position||"").trim();
+  const seals=body.seals||[];
+  const want_lic=body.license!==false;
+  const operator=(body.operator||"").trim()||"二维";
+  if(!name) return {ok:false,msg:"公司名不能为空"};
+  if(!legal) return {ok:false,msg:"法人不能为空"};
+  if(DB.items.some(i=>i["公司名称"]===name)) return {ok:false,msg:"公司 "+name+" 已存在"};
+  const pos_id=position?await ensureLoc(position,"位置",operator):"";
+  const created=[],newItems=[],newMovs=[];
+  for(const s of seals){
+    const id=nextItemId();
+    newItems.push({item_id:id,公司名称:name,家族:family,法人:legal,公司类型:ctype,注册时间:reg,
+      资料类型:s,资料类别:"章",当前位置ID:pos_id,当前位置:position||"待分配",当前位置类型:"位置",
+      状态:STAT_IN,持有人:"",出库时间:"",更新时间:nowStr(),备注:""});
+    created.push(s);
+    newMovs.push(movRow({item_id:id,公司名称:name,资料类型:s,动作:"入库",起点名称:"新注册",终点ID:pos_id,终点名称:position||"待分配",终点类型:"位置",操作人:operator,事由:"新注册入库"}));
+  }
+  if(want_lic){
+    const id=nextItemId();
+    newItems.push({item_id:id,公司名称:name,家族:family,法人:legal,公司类型:ctype,注册时间:reg,
+      资料类型:"营业执照",资料类别:"执照",当前位置ID:"",当前位置:"待分配",当前位置类型:"位置",状态:STAT_IN,持有人:"",出库时间:"",更新时间:nowStr(),备注:"存放柜二，待定位"});
+    created.push("营业执照");
+    newMovs.push(movRow({item_id:id,公司名称:name,资料类型:"营业执照",动作:"入库",起点名称:"新注册",终点类型:"位置",终点名称:"待分配",操作人:operator,事由:"新注册入库"}));
+  }
+  if(newItems.length){
+    const {error}=await sb.from("items").insert(newItems);
+    if(error) return {ok:false,msg:errMsg(error)};
+    const {error:me}=await sb.from("movements").insert(newMovs);
+    if(me) return {ok:false,msg:errMsg(me)};
+  }
+  return {ok:true,created};
+}
+async function opAddItem(body){
+  const name=(body.name||"").trim();
+  const itype=(body.type||body.item||"").trim();
+  const position=(body.position||"").trim();
+  const operator=(body.operator||"").trim()||"二维";
+  if(!name) return {ok:false,msg:"公司名不能为空"};
+  if(!itype) return {ok:false,msg:"资料类型不能为空"};
+  const tpl=DB.items.find(i=>i["公司名称"]===name);
+  if(!tpl) return {ok:false,msg:"找不到公司："+name};
+  if(DB.items.some(i=>i["公司名称"]===name&&i["资料类型"]===itype)) return {ok:false,msg:name+" 已有 "+itype};
+  const kind=(itype==="营业执照"||itype==="国外执照")?"执照":"章";
+  const pos=position||(kind==="章"?tpl["当前位置"]:"待分配");
+  const pos_id=(pos&&pos!=="待分配")?await ensureLoc(pos,"位置",operator):"";
+  const id=nextItemId();
+  const row={item_id:id,公司名称:name,家族:tpl["家族"],法人:tpl["法人"],公司类型:tpl["公司类型"],注册时间:tpl["注册时间"],
+    资料类型:itype,资料类别:kind,当前位置ID:pos_id,当前位置:pos||"待分配",当前位置类型:"位置",状态:STAT_IN,持有人:"",出库时间:"",更新时间:nowStr(),备注:""};
+  const {error}=await sb.from("items").insert(row);
+  if(error) return {ok:false,msg:errMsg(error)};
+  const m=movRow({item_id:id,公司名称:name,资料类型:itype,动作:"入库",起点名称:"新增",终点ID:pos_id,终点名称:pos||"待分配",终点类型:"位置",操作人:operator,事由:"新增资料入库"});
+  const {error:me}=await sb.from("movements").insert(m);
+  if(me) return {ok:false,msg:errMsg(me)};
+  return {ok:true};
+}
+async function opEditItem(body){
+  const item_id=body.item_id||"";
+  const operator=(body.operator||"").trim()||"二维";
+  if(!item_id) return {ok:false,msg:"缺少 item_id"};
+  const t=DB.items.find(i=>i["item_id"]===item_id);
+  if(!t) return {ok:false,msg:"找不到该资料"};
+  const changed=[];
+  for(const [k,cn] of [["name","公司名称"],["legalPerson","法人"],["family","家族"],["note","备注"]]){
+    const v=(body[k]||"").trim();
+    if(v&&v!==t[cn]){changed.push(cn+"："+t[cn]+" → "+v);t[cn]=v;}
+  }
+  t["更新时间"]=nowStr();
+  if(changed.length){
+    const upd={};["公司名称","法人","家族","备注","更新时间"].forEach(c=>upd[c]=t[c]);
+    const {error}=await sb.from("items").update(upd).eq("item_id",item_id);
+    if(error) return {ok:false,msg:errMsg(error)};
+    const m=movRow({item_id,公司名称:t["公司名称"],资料类型:t["资料类型"],动作:"编辑",操作人:operator,事由:changed.join("；")});
+    const {error:me}=await sb.from("movements").insert(m);
+    if(me) return {ok:false,msg:errMsg(me)};
+  }
+  return {ok:true,changed};
+}
+async function opDelItem(body){
+  const item_id=body.item_id||"";
+  const operator=(body.operator||"").trim()||"二维";
+  if(!item_id) return {ok:false,msg:"缺少 item_id"};
+  const t=DB.items.find(i=>i["item_id"]===item_id);
+  if(!t) return {ok:false,msg:"找不到该资料"};
+  const m=movRow({item_id,公司名称:t["公司名称"],资料类型:t["资料类型"],动作:"删除",起点ID:t["当前位置ID"],起点名称:t["当前位置"],起点类型:t["当前位置类型"],终点名称:"（已删除）",操作人:operator,事由:"删除资料"});
+  const {error:de}=await sb.from("items").delete().eq("item_id",item_id);
+  if(de) return {ok:false,msg:errMsg(de)};
+  const {error:me}=await sb.from("movements").insert(m);
+  if(me) return {ok:false,msg:errMsg(me)};
+  return {ok:true};
+}
+async function opDelCo(body){
+  const name=(body.name||"").trim();
+  const operator=(body.operator||"").trim()||"二维";
+  if(!name) return {ok:false,msg:"公司名不能为空"};
+  const n=DB.items.filter(i=>i["公司名称"]===name).length;
+  if(!n) return {ok:false,msg:"找不到公司："+name};
+  const m=movRow({公司名称:name,资料类型:"全部",动作:"删除公司",操作人:operator,事由:"删除公司及其 "+n+" 件资料"});
+  const {error:de}=await sb.from("items").delete().eq("公司名称",name);
+  if(de) return {ok:false,msg:errMsg(de)};
+  const {error:me}=await sb.from("movements").insert(m);
+  if(me) return {ok:false,msg:errMsg(me)};
+  return {ok:true,deleted:n};
+}
+async function opAddLoc(body){
+  const name=(body.name||"").trim();
+  const ltype=body.type||"位置";
+  const cabinet=(body.cabinet||"").trim();
+  const family=(body.family||"").trim();
+  const owner=(body.owner||"").trim();
+  const operator=(body.operator||"").trim()||"二维";
+  if(!name) return {ok:false,msg:"名称不能为空"};
+  if(DB.locations.some(l=>l["名称"]===name)) return {ok:false,msg:name+" 已存在"};
+  const row={"id":nextLocId(),"名称":name,"类型":ltype,"柜子":"","排":"","位":"","关联家族":"","负责人":"","备注":""};
+  if(ltype==="位置"&&cabinet){
+    const used=new Set(DB.locations.filter(l=>l["柜子"]===cabinet&&l["类型"]==="位置"&&l["排"]).map(l=>l["排"]+"_"+l["位"]));
+    outer: for(let r=1;r<=ROWS_PER_CAB;r++) for(let c=1;c<=COLS_PER_ROW;c++){ if(!used.has(r+"_"+c)){row["排"]=String(r);row["位"]=String(c);break outer;} }
+  }
+  if(family) row["关联家族"]=family;
+  if(owner) row["负责人"]=owner;
+  const {error}=await sb.from("locations").insert(row);
+  if(error) return {ok:false,msg:errMsg(error)};
+  const m=movRow({终点ID:row["id"],终点名称:name,终点类型:ltype,操作人:operator,事由:"新增"+(ltype==="人员"?"人员":"筐")});
+  const {error:me}=await sb.from("movements").insert(m);
+  if(me) return {ok:false,msg:errMsg(me)};
+  return {ok:true};
+}
+async function opDelLoc(body){
+  const name=(body.name||"").trim();
+  const operator=(body.operator||"").trim()||"二维";
+  if(!name) return {ok:false,msg:"名称不能为空"};
+  const l=DB.locations.find(x=>x["名称"]===name);
+  if(!l) return {ok:false,msg:"找不到「"+name+"」"};
+  if(l["类型"]==="柜子") return {ok:false,msg:"柜子请用柜子图上的「删除柜」"};
+  if(l["类型"]==="人员"){
+    const held=DB.items.filter(i=>i["状态"]===STAT_OUT&&i["持有人"]===name);
+    if(held.length) return {ok:false,msg:"「"+name+"」还持有 "+held.length+" 件资料，请先收回再删除"};
+  }else{
+    const inside=DB.items.filter(i=>i["当前位置"]===name&&i["状态"]!==STAT_OFF);
+    if(inside.length) return {ok:false,msg:"「"+name+"」里还有 "+inside.length+" 件资料，请先调拨或缴销后再删除"};
+  }
+  const {error:de}=await sb.from("locations").delete().eq("名称",name);
+  if(de) return {ok:false,msg:errMsg(de)};
+  const m=movRow({起点ID:l["id"],起点名称:name,起点类型:l["类型"],操作人:operator,事由:"删除"+(l["类型"]==="人员"?"人员":"筐")});
+  const {error:me}=await sb.from("movements").insert(m);
+  if(me) return {ok:false,msg:errMsg(me)};
+  return {ok:true};
+}
+async function opDelCab(body){
+  const name=(body.name||"").trim();
+  const operator=(body.operator||"").trim()||"二维";
+  if(!name) return {ok:false,msg:"名称不能为空"};
+  const cab=DB.locations.find(l=>l["名称"]===name);
+  if(!cab||cab["类型"]!=="柜子") return {ok:false,msg:"找不到柜子「"+name+"」"};
+  const baskets=DB.locations.filter(l=>l["类型"]==="位置"&&l["柜子"]===name);
+  const busy=baskets.filter(b=>DB.items.some(i=>i["当前位置"]===b["名称"]&&i["状态"]!==STAT_OFF));
+  if(busy.length){const names=busy.slice(0,5).map(b=>b["名称"]).join("、");return {ok:false,msg:"柜内还有 "+busy.length+" 个非空筐（"+names+(busy.length>5?"…":"")+"），请先把筐拖到别的柜再删除"};}
+  const kill=[name].concat(baskets.map(b=>b["名称"]));
+  const {error:de}=await sb.from("locations").delete().in("名称",kill);
+  if(de) return {ok:false,msg:errMsg(de)};
+  const m=movRow({起点ID:cab["id"],起点名称:name,起点类型:"柜子",操作人:operator,事由:"删除柜子（连带 "+baskets.length+" 个空筐）"});
+  const {error:me}=await sb.from("movements").insert(m);
+  if(me) return {ok:false,msg:errMsg(me)};
+  return {ok:true,baskets:baskets.length};
+}
+async function opRenameLoc(body){
+  const oldN=(body.old||body.name||"").trim();
+  const newN=(body.new||"").trim();
+  const operator=(body.operator||"").trim()||"二维";
+  if(!oldN||!newN) return {ok:false,msg:"原名称和新名称都不能为空"};
+  if(oldN===newN) return {ok:false,msg:"新名称与原名称相同"};
+  if(newN.length>20) return {ok:false,msg:"名称过长"};
+  const l=DB.locations.find(x=>x["名称"]===oldN);
+  if(!l) return {ok:false,msg:"找不到「"+oldN+"」"};
+  if(DB.locations.some(x=>x["名称"]===newN)) return {ok:false,msg:"「"+newN+"」已存在（柜子/筐/人员名称不能重复）"};
+  const kind=l["类型"];
+  let n_item=0,n_mov=0;
+  if(kind==="柜子"){DB.locations.forEach(x=>{if(x["柜子"]===oldN)x["柜子"]=newN;});}
+  else if(kind==="位置"){DB.items.forEach(i=>{if(i["当前位置"]===oldN){i["当前位置"]=newN;i["更新时间"]=nowStr();n_item++;}});}
+  else if(kind==="人员"){DB.items.forEach(i=>{if(i["持有人"]===oldN){i["持有人"]=newN;i["更新时间"]=nowStr();n_item++;}if(i["当前位置"]===oldN){i["当前位置"]=newN;}});}
+  l["名称"]=newN;
+  DB.movements.forEach(m=>{if(m["起点名称"]===oldN){m["起点名称"]=newN;n_mov++;}if(m["终点名称"]===oldN){m["终点名称"]=newN;n_mov++;}});
+  let {error:e1}=await sb.from("locations").update({名称:newN}).eq("id",l["id"]);
+  if(e1) return {ok:false,msg:errMsg(e1)};
+  if(kind==="柜子"){const {error:e2}=await sb.from("locations").update({柜子:newN}).eq("柜子",oldN);if(e2) return {ok:false,msg:errMsg(e2)};}
+  else if(kind==="位置"){const {error:e3}=await sb.from("items").update({当前位置:newN,更新时间:nowStr()}).eq("当前位置",oldN);if(e3) return {ok:false,msg:errMsg(e3)};}
+  else if(kind==="人员"){const {error:e4}=await sb.from("items").update({持有人:newN,更新时间:nowStr()}).eq("持有人",oldN);if(e4) return {ok:false,msg:errMsg(e4)};const {error:e5}=await sb.from("items").update({当前位置:newN}).eq("当前位置",oldN);if(e5) return {ok:false,msg:errMsg(e5)};}
+  const {error:m1}=await sb.from("movements").update({起点名称:newN}).eq("起点名称",oldN);
+  if(m1) return {ok:false,msg:errMsg(m1)};
+  const {error:m2}=await sb.from("movements").update({终点名称:newN}).eq("终点名称",oldN);
+  if(m2) return {ok:false,msg:errMsg(m2)};
+  const m=movRow({起点ID:l["id"],起点名称:oldN,起点类型:kind,终点ID:l["id"],终点名称:newN,终点类型:kind,操作人:operator,事由:(kind==="柜子"?"柜子":(kind==="人员"?"人员":"筐"))+"改名"+(n_item||n_mov?("；同步 "+n_item+" 件资料、"+n_mov+" 条轨迹"):"")});
+  const {error:me}=await sb.from("movements").insert(m);
+  if(me) return {ok:false,msg:errMsg(me)};
+  return {ok:true,items:n_item,movements:n_mov};
+}
+async function opBatchImp(body){
+  const rows=body.rows||[];
+  const operator=(body.operator||"").trim()||"二维";
+  if(!rows.length) return {ok:false,msg:"无数据"};
+  const created=[],skipped=[],newItems=[],newMovs=[];
+  for(const r of rows){
+    const name=(r.name||"").trim();
+    if(!name) continue;
+    const family=(r.family||"").trim();
+    const legal=(r.legalPerson||"").trim();
+    const ctype=r.type||"大陆";
+    const reg=r.regTime||"";
+    const pos=(r.position||"").trim();
+    const want=[];
+    for(const s of SEAL_TYPES){if(["1","1.0","true","True"].includes(String(r[s])))want.push([s,"章"]);}
+    if(["1","1.0","true","True"].includes(String(r.license)))want.push(["营业执照","执照"]);
+    if(!want.length) continue;
+    const thisPosId=pos?await ensureLoc(pos,"位置",operator):"";
+    for(const [itype,kind] of want){
+      if(DB.items.some(i=>i["公司名称"]===name&&i["资料类型"]===itype)){skipped.push(name+"/"+itype);continue;}
+      const tgt=kind==="章"?pos:"待分配";
+      const tgt_id=kind==="章"?thisPosId:"";
+      const id=nextItemId();
+      newItems.push({item_id:id,公司名称:name,家族:family,法人:legal,公司类型:ctype,注册时间:reg,资料类型:itype,资料类别:kind,当前位置ID:tgt_id,当前位置:tgt||"待分配",当前位置类型:"位置",状态:STAT_IN,持有人:"",出库时间:"",更新时间:nowStr(),备注:""});
+      created.push(name+"/"+itype);
+      newMovs.push(movRow({item_id:id,公司名称:name,资料类型:itype,动作:"入库",起点名称:"批量导入",终点ID:tgt_id,终点名称:tgt||"待分配",终点类型:"位置",操作人:operator,事由:"批量导入"}));
+    }
+  }
+  if(newItems.length){
+    const {error}=await sb.from("items").insert(newItems);
+    if(error) return {ok:false,msg:errMsg(error)};
+    const {error:me}=await sb.from("movements").insert(newMovs);
+    if(me) return {ok:false,msg:errMsg(me)};
+  }
+  return {ok:true,created,skipped};
 }
 async function reloadAll(){
   $("status").textContent="加载中…";
@@ -166,34 +541,39 @@ async function reloadAll(){
 /* ============ 登录 ============ */
 function syncHeader(){
   const a=isAdmin();
-  $("btnLogin").style.display=a?"none":"inline-block";
-  $("btnLogout").style.display=a?"inline-block":"none";
-  $("who").textContent=a?("管理员 "+esc(AUTH.user)+" · 操作人 "+esc(OPERATOR||"未设置")):"（只读前台）";
+  $("btnLogin").style.display=AUTH.role?"none":"inline-block";
+  $("btnLogout").style.display=AUTH.role?"inline-block":"none";
+  if(a) $("who").textContent="主账号 "+esc(AUTH.user)+" · 操作人 "+esc(OPERATOR||"未设置");
+  else if(AUTH.role) $("who").textContent="员工前台 "+esc(AUTH.user);
+  else $("who").textContent="（未登录，请点击右上角登录）";
 }
 function showLogin(){
-  openModal('<h3>管理员登录</h3>'
-    +'<div class="frow"><div class="fg"><span class="t">账号</span><input id="lgUser" value="二维"></div>'
+  openModal('<h3>登录</h3>'
+    +'<div class="frow"><div class="fg"><span class="t">账号</span><input id="lgUser" value="JMYZZ" placeholder="JMYZZMASTER / JMYZZ"></div>'
     +'<div class="fg"><span class="t">密码</span><input id="lgPwd" type="password"></div></div>'
-    +'<p class="mini">登录后可进行出库、入库、调拨与数据管理；登录状态保留 7 天。</p>'
+    +'<p class="mini">主账号 <b>JMYZZMASTER</b>（全部功能）；子账号 <b>JMYZZ</b>（仅查看、搜索、点筐看明细）。登录状态由浏览器会话保持并自动续期。</p>'
     +'<div style="margin-top:10px"><button onclick="doLogin()">登录</button> '
     +'<button class="ghost" onclick="closeModal()">取消</button></div>');
   setTimeout(()=>{const p=$("lgPwd");if(p)p.focus();},100);
 }
 async function doLogin(){
   const u=($("lgUser").value||"").trim(),p=($("lgPwd").value||"").trim();
-  const r=await api("/api/login",{user:u,pwd:p});
-  if(!r.ok){toast(r.msg||"登录失败",false);return;}
-  AUTH.token=r.token;AUTH.user=r.user;AUTH.ts=Date.now();
-  localStorage.setItem("seal_token",r.token);
-  localStorage.setItem("seal_user",r.user);
-  localStorage.setItem("seal_ts",String(AUTH.ts));
-  if(!OPERATOR){askOperator();}
-  closeModal();syncHeader();render();toast("已登录，欢迎 "+r.user,true);
+  if(!sb){toast("Supabase 未加载，请检查网络后刷新",false);return;}
+  const email=ACCOUNT_MAP[u]||(u.indexOf("@")>=0?u:"");
+  if(!email){toast("账号不存在，可用：JMYZZMASTER（主账号）/ JMYZZ（子账号）",false);return;}
+  const {data,error}=await sb.auth.signInWithPassword({email,password:p});
+  if(error){toast("登录失败："+(error.message||""),false);return;}
+  const role=(data.user&&data.user.app_metadata&&data.user.app_metadata.role)||"staff";
+  AUTH.role=role;AUTH.user=u;AUTH.token=data.session.access_token;AUTH.ts=Date.now();
+  localStorage.setItem("seal_role",role);
+  if(!OPERATOR){OPERATOR=u;localStorage.setItem("seal_operator",OPERATOR);}
+  closeModal();syncHeader();render();toast("已登录，"+(role==="master"?"主账号 ":"员工前台 ")+u,true);
 }
 async function doLogout(){
-  await api("/api/logout",{token:AUTH.token});
-  localStorage.removeItem("seal_token");localStorage.removeItem("seal_user");localStorage.removeItem("seal_ts");
-  AUTH={token:"",user:"",ts:0};syncHeader();render();toast("已退出，当前为只读前台",true);
+  if(sb) await sb.auth.signOut();
+  AUTH={token:"",user:"",ts:0,role:""};
+  localStorage.removeItem("seal_token");localStorage.removeItem("seal_user");localStorage.removeItem("seal_ts");localStorage.removeItem("seal_role");
+  syncHeader();render();toast("已退出，当前为只读前台",true);
 }
 function askOperator(){
   const n=prompt("请输入操作人姓名（将记录在所有操作留痕中）：",OPERATOR||"二维");
@@ -203,7 +583,9 @@ function askOperator(){
 
 /* ============ 导航 ============ */
 function renderNav(){
-  const front=[["dash","看板"],["search","查询定位"],["cabs","柜子图"],["ops","出入库"]];
+  const front=isAdmin()
+    ? [["dash","看板"],["search","查询定位"],["cabs","柜子图"],["ops","出入库"]]
+    : [["dash","看板"],["search","查询定位"],["cabs","柜子图"]];
   const admin=[["trace","流转轨迹"],["inv","盘点导出"],["data","数据管理"]];
   let tabs=front.slice();
   if(isAdmin()) tabs=tabs.concat(admin);
@@ -939,18 +1321,61 @@ function invExportGuard(groups,sels){
   return true;
 }
 async function exportInvXlsx(){
+  if(!window.XLSX){toast("Excel 组件未加载，请检查网络后刷新",false);return;}
   const {cols,groups}=invMatrix();
   if(!invExportGuard(groups,invSelected().length))return;
   const title=invTitle()+"-盘点表-"+todayStr();
   try{
-    const payload={title:title,header:["序号","柜子","筐","公司"].concat(cols).concat(["实际核对"]),
-      groups:groups.map(g=>({no:g.no,co:g.co,lead:[g.cab,g.bk],lines:g.lines}))};
-    const r=await fetch("/api/invxlsx",{method:"POST",headers:{"Content-Type":"application/json"},
-      body:JSON.stringify(payload)});
-    if(!r.ok){toast("导出失败（服务器可能缺少 openpyxl）",false);return;}
-    const blob=await r.blob();
-    const a=document.createElement("a");a.href=URL.createObjectURL(blob);
-    a.download=title+".xlsx";a.click();
+    const header=["序号","柜子","筐","公司"].concat(cols).concat(["实际核对"]);
+    const aoa=[];
+    aoa.push(header.map((_,j)=> j===0?title:""));
+    aoa.push(header.slice());
+    const merges=[];
+    let r=2;
+    for(const g of groups){
+      const lines=g.lines||[]; if(!lines.length) continue;
+      const span=lines.length, first=r;
+      aoa[first]=aoa[first]||[];
+      aoa[first][0]=g.no;
+      aoa[first][1]=(g.lead&&g.lead[0])||"";
+      aoa[first][2]=(g.lead&&g.lead[1])||"";
+      aoa[first][3]=g.co;
+      for(let k=0;k<span;k++){
+        aoa[first+k]=aoa[first+k]||[];
+        for(let c=0;c<header.length;c++){ if(aoa[first+k][c]===undefined) aoa[first+k][c]=""; }
+        const line=lines[k]||[];
+        for(let j=0;j<line.length;j++){ aoa[first+k][4+j]=line[j]; }
+      }
+      if(span>1){
+        merges.push({s:{r:first,c:0},e:{r:first+span-1,c:0}});
+        for(let c=1;c<=3;c++) merges.push({s:{r:first,c},e:{r:first+span-1,c}});
+      }
+      r+=span;
+    }
+    const thinAll={top:{style:"thin",color:"9AA0A6"},bottom:{style:"thin",color:"9AA0A6"},left:{style:"thin",color:"9AA0A6"},right:{style:"thin",color:"9AA0A6"}};
+    const ws=XLSX.utils.aoa_to_sheet(aoa);
+    const enc=XLSX.utils.encode_cell;
+    for(let j=0;j<header.length;j++){ const a=ws[enc({r:0,c:j})]; if(a){a.s={font:{bold:true,size:14},alignment:{horizontal:"center",vertical:"center",wrapText:true}};} }
+    for(let j=0;j<header.length;j++){ const a=ws[enc({r:1,c:j})]; if(a){a.s={font:{bold:true,size:11},alignment:{horizontal:"center",vertical:"center",wrapText:true},fill:{fgColor:"EFF3F8"},border:thinAll};} }
+    for(let i=2;i<aoa.length;i++){
+      for(let j=0;j<header.length;j++){
+        const a=ws[enc({r:i,c:j})]; if(!a) continue;
+        const v=a.v;
+        const st={alignment:{horizontal:"center",vertical:"center",wrapText:true},border:thinAll};
+        if(j>=4&&j<header.length-1){
+          if(v==="无"||v==="已缴销") st.font={color:"9AA0A6"};
+          else if(v&&v!=="✓"&&!String(v).startsWith("✓×")) st.font={color:"BF8700"};
+        }
+        a.s=st;
+      }
+    }
+    ws["!merges"]=merges;
+    ws["!cols"]=header.map(h=>{const w=({"序号":6,"柜子":9,"筐":17,"公司":30,"实际核对":16})[h];return {wch:w||13};});
+    const wb=XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb,ws,"盘点表");
+    const out=XLSX.write(wb,{bookType:"xlsx",type:"array"});
+    const blob=new Blob([out],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
+    const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=title+".xlsx";a.click();
     toast("已导出 "+title+".xlsx",true);
   }catch(e){toast("导出失败："+e,false);}
 }
@@ -1016,7 +1441,19 @@ function renderData(m){
   m.innerHTML=h;
 }
 function saveOp(){OPERATOR=($("opName").value||"").trim();localStorage.setItem("seal_operator",OPERATOR);syncHeader();toast("已保存",true);}
-function dl(n){window.open("/api/export/"+n,"_blank");}
+function dl(n){
+  let rows,headers,fname;
+  if(n==="items"){headers=ITEMS_HEADERS;rows=DB.items;fname="items.csv";}
+  else if(n==="locations"){headers=LOCS_HEADERS;rows=DB.locations;fname="locations.csv";}
+  else {headers=MOVS_HEADERS;rows=DB.movements;fname="movements.csv";}
+  if(!rows||!rows.length){toast("暂无数据",false);return;}
+  const out=[headers.join(",")].concat(rows.map(r=>headers.map(h=>csvEsc(r[h])).join(",")));
+  const csv="\ufeff"+out.join("\r\n");
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv;charset=utf-8"}));
+  a.download=fname;a.click();
+  toast("已导出 "+fname,true);
+}
 async function doNewCo(){
   const name=($("ncName").value||"").trim(),lp=($("ncLP").value||"").trim();
   if(!name){toast("请填写公司名称",false);return;}
@@ -1053,7 +1490,19 @@ function closeModal(){$("modalMask").classList.remove("show");}
 
 /* ============ boot ============ */
 window.addEventListener("DOMContentLoaded",async()=>{
-  if(!OPERATOR&&isAdmin())OPERATOR="二维";
+  if(!sb){
+    $("status").textContent="Supabase 加载失败";
+    $("main").innerHTML='<div class="card"><p style="color:#d1242f">前端依赖（Supabase / Excel）加载失败，请检查网络后刷新页面。</p></div>';
+    return;
+  }
+  const s=await sb.auth.getSession();
+  if(s&&s.data&&s.data.session){
+    const u=s.data.session.user||{};
+    const role=(u.app_metadata&&u.app_metadata.role)||"staff";
+    AUTH.role=role;AUTH.user=(u.email||"").split("@")[0].toUpperCase();
+    AUTH.token=s.data.session.access_token;AUTH.ts=Date.now();
+    if(!OPERATOR){OPERATOR=AUTH.user;localStorage.setItem("seal_operator",OPERATOR);}
+  }
   await reloadAll();
 });
 </script>
