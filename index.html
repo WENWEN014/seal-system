@@ -237,22 +237,28 @@ async function loadAll(){
 async function opMove(body){
   const item_ids=body.item_ids||[];
   const action=body.action||"";
-  const dest_name=(body.dest_name||"").trim();
+  const rawDest=(body.dest_name||"").trim();
   const dest_type=body.dest_type||"位置";
   const operator=(body.operator||"").trim()||"二维";
   const purpose=(body.purpose||"").trim();
   const date=body.date||todayStr();
   if(!item_ids.length) return {ok:false,msg:"请选择资料"};
   if(!action) return {ok:false,msg:"请指定动作"};
-  if(!dest_name) return {ok:false,msg:"请指定目标位置/人员"};
+  const isOff=action==="缴销";
+  if(!isOff && !rawDest) return {ok:false,msg:"请指定目标位置/人员"};
   const items=(await sbGet("items")).filter(i=>item_ids.includes(i["item_id"]));
   if(!items.length) return {ok:false,msg:"没有匹配的资料"};
-  const dest_id=await ensureLoc(dest_name,dest_type,operator);
   const common={};
-  common["当前位置ID"]=dest_id;common["当前位置"]=dest_name;common["当前位置类型"]=dest_type;
-  if(action==="出库"){common["状态"]=STAT_OUT;common["持有人"]=dest_name;common["出库时间"]=date;}
-  else if(action==="入库"||action==="调拨"){common["状态"]=STAT_IN;common["持有人"]="";common["出库时间"]="";}
-  else if(action==="缴销"){common["状态"]=STAT_OFF;common["持有人"]="";common["出库时间"]="";}
+  let dest_id="",dest_name=rawDest;
+  if(isOff){
+    // 缴销：仅标记状态，不改变当前位置
+    common["状态"]=STAT_OFF;common["持有人"]="";common["出库时间"]="";dest_name="（已缴销）";
+  }else{
+    dest_id=await ensureLoc(rawDest,dest_type,operator);
+    common["当前位置ID"]=dest_id;common["当前位置"]=rawDest;common["当前位置类型"]=dest_type;
+    if(action==="出库"){common["状态"]=STAT_OUT;common["持有人"]=rawDest;common["出库时间"]=date;}
+    else {common["状态"]=STAT_IN;common["持有人"]="";common["出库时间"]="";}
+  }
   common["更新时间"]=nowStr();
   if(purpose) common["备注"]=purpose;
   const {error:ue}=await sb.from("items").update(common).in("item_id",item_ids);
@@ -260,10 +266,10 @@ async function opMove(body){
   const movements=items.map(i=>{
     const src_id=i["当前位置ID"],src_name=i["当前位置"],src_type=i["当前位置类型"]||"位置";
     return movRow({item_id:i["item_id"],公司名称:i["公司名称"],资料类型:i["资料类型"],动作:action,
-      起点ID:src_id,起点名称:src_name,起点类型:src_type,终点ID:dest_id,终点名称:dest_name,终点类型:dest_type,操作人:operator,事由:purpose});
+      起点ID:src_id,起点名称:src_name,起点类型:src_type,终点ID:dest_id,终点名称:dest_name,终点类型:(isOff?"":dest_type),操作人:operator,事由:purpose});
   });
   if(movements.length){const {error:me}=await sb.from("movements").insert(movements);if(me) return {ok:false,msg:errMsg(me)};}
-  return {ok:true,moved:movements.length,detail:movements.length+" 件："+action+" → "+dest_name};
+  return {ok:true,moved:movements.length,detail:movements.length+" 件："+action};
 }
 async function opSaveLayout(body){
   const baskets=body.baskets||[];
@@ -703,8 +709,19 @@ function itemDetail(id){
     +'<span class="ar">→</span><span class="n'+(m["终点类型"]==="人员"?" p":"")+'">'+esc(m["终点名称"]||"—")+'</span>'
     +'<span class="mini">'+esc(m["操作人"])+'</span></div>';
     if(m["事由"])h+='<div class="mini" style="margin:0 0 6px 60px">事由：'+esc(m["事由"])+'</div>';});
-  h+='</div></div><div style="margin-top:14px"><button class="ghost" onclick="closeModal()">关闭</button></div>';
+  h+='</div></div><div style="margin-top:14px">'
+    +(isAdmin()?'<button class="danger" onclick="delItem(\''+id+'\')">删除该资料</button> ':'')
+    +'<button class="ghost" onclick="closeModal()">关闭</button></div>';
   openModal(h);
+}
+// 删除单条资料（注销公司的章 / 录错纠错），仅管理员可操作
+async function delItem(id){
+  const i=DB.items.find(x=>x["item_id"]===id);if(!i)return;
+  if(!isAdmin()){toast("仅管理员可删除",false);return;}
+  if(!confirm("确认删除「"+i["公司名称"]+"」的「"+i["资料类型"]+"」？此操作不可恢复。"))return;
+  const r=await api("/api/delitem",{item_id:id,operator:OPERATOR||"二维"});
+  if(!r.ok){toast(r.msg,false);return;}
+  closeModal();toast("已删除该资料",true);await reloadAll();
 }
 
 /* ============ 柜子图（4 排 × 3 位，管理员可拖拽）============ */
@@ -920,7 +937,7 @@ async function mpAdd(){
 }
 
 /* ============ 出入库（出库 / 入库 / 调拨）============ */
-const OPS_TABS=[["out","出库"],["in","入库"],["mv","调拨"]];
+const OPS_TABS=[["out","出库"],["in","入库"],["mv","调拨"],["off","缴销"]];
 function renderOps(m){
   const admin=isAdmin();
   let h='';
@@ -970,6 +987,7 @@ function niRenderForm(){
   }else{
     const cos=[...new Set(DB.items.map(i=>i["公司名称"]))].sort((a,b)=>a.localeCompare(b,"zh"));
     f='<div class="frow">'
+      +'<div class="fg"><span class="t">搜索公司</span><input id="niCoSearch" style="width:220px" placeholder="输入公司名筛选" oninput="niCoFill(this.value)"></div>'
       +'<div class="fg"><span class="t">选择公司</span><select id="niCo" style="width:260px" onchange="niExistChk()">'
       +cos.map(c=>'<option>'+esc(c)+'</option>').join("")+'</select></div>'
       +bskSel+'</div>'
@@ -980,7 +998,16 @@ function niRenderForm(){
       +'<div style="margin-top:8px"><button onclick="niExec()">执行入库</button></div>';
   }
   box.innerHTML=f;
-  if(mode==="exist") niExistChk();
+  if(mode==="exist") niCoFill("");
+}
+// 已有公司补章：按搜索词过滤公司下拉（含新录入的公司），并刷新可补章列表
+function niCoFill(q){
+  const sel=$("niCo"); if(!sel)return;
+  q=(q||"").trim().toLowerCase();
+  const cos=[...new Set(DB.items.map(i=>i["公司名称"]))].sort((a,b)=>a.localeCompare(b,"zh"));
+  const list=q?cos.filter(c=>c.toLowerCase().includes(q)):cos;
+  sel.innerHTML=list.length?list.map(c=>'<option>'+esc(c)+'</option>').join(""):'<option>无匹配公司</option>';
+  niExistChk();
 }
 // 新建公司模式下，若填写的公司已存在，自动沿用其法人/家族/类型，避免重复录入
 function niPrefill(){
@@ -1035,9 +1062,10 @@ async function niExec(){
 function switchOps(k){ui.ops=k;selCo.clear();render();}
 function clearSel(){sel[ui.ops].clear();selCo.clear();renderOpsList();}
 function opsFilterItems(){
-  // 出库：在库的章/执照；入库：在外部的；调拨：在库的
+  // 出库：在库的章/执照；入库：在外部的；调拨：在库的；缴销：未缴销的
   if(ui.ops==="out")return DB.items.filter(i=>i["状态"]===STAT_IN&&i["当前位置"]&&i["当前位置"]!=="待分配");
   if(ui.ops==="in")return DB.items.filter(i=>i["状态"]===STAT_OUT);
+  if(ui.ops==="off")return DB.items.filter(i=>i["状态"]!==STAT_OFF);
   return DB.items.filter(i=>i["状态"]===STAT_IN&&i["当前位置"]&&i["当前位置"]!=="待分配");
 }
 function renderOpsList(){
@@ -1080,21 +1108,28 @@ function renderOpsBar(){
   if(ui.ops==="out"){
     const ps=DB.locations.filter(l=>l["类型"]==="人员").map(l=>l["名称"]);
     h+='<div class="fg"><span class="t">领用人</span><select id="obDest">'+ps.map(p=>'<option>'+esc(p)+'</option>').join("")+'</select></div>';
-  }else{
+  }else if(ui.ops==="mv"){
+    const bs=DB.locations.filter(l=>l["类型"]==="位置").map(l=>l["名称"]);
+    h+='<div class="fg"><span class="t">目标筐</span><select id="obDest">'+bs.map(p=>'<option>'+esc(p)+'</option>').join("")+'</select></div>';
+  }else if(ui.ops!=="off"){
     const bs=DB.locations.filter(l=>l["类型"]==="位置").map(l=>l["名称"]);
     h+='<div class="fg"><span class="t">目标筐</span><select id="obDest">'+bs.map(p=>'<option>'+esc(p)+'</option>').join("")+'</select></div>';
   }
-  h+='<div class="fg"><span class="t">事由</span><input id="obWhy" style="width:200px" placeholder="选填"></div>';
+  h+='<div class="fg"><span class="t">备注</span><input id="obWhy" style="width:200px" placeholder="选填，记录事由"></div>';
   if(ui.ops==="mv")h+='<div class="fg"><span class="t">新法人（选填）</span><input id="obLP" style="width:140px"></div>';
-  h+='<button '+(n?"":"disabled")+' onclick="execOps()">执行'+(ui.ops==="out"?"出库":ui.ops==="in"?"入库":"调拨")+'</button></div>';
+  const label=ui.ops==="out"?"出库":ui.ops==="in"?"入库":ui.ops==="mv"?"调拨":"缴销";
+  h+='<button '+(n?"":"disabled")+' onclick="execOps()">执行'+label+'</button></div>';
   $("opsBar").innerHTML=h;
 }
 async function execOps(){
   const cur=sel[ui.ops],ids=[...cur];
   if(!ids.length){toast("请先勾选资料",false);return;}
-  const dest=$("obDest").value,why=($("obWhy").value||"").trim();
-  const action=ui.ops==="out"?"出库":ui.ops==="in"?"入库":"调拨";
-  const destType=ui.ops==="out"?"人员":"位置";
+  const why=($("obWhy").value||"").trim();
+  let action,dest="",destType="位置";
+  if(ui.ops==="out"){action="出库";dest=$("obDest").value;destType="人员";}
+  else if(ui.ops==="in"){action="入库";dest=$("obDest").value;}
+  else if(ui.ops==="mv"){action="调拨";dest=$("obDest").value;}
+  else {action="缴销";}
   if(!OPERATOR)askOperator();
   let purpose=why;
   if(ui.ops==="mv"){const lp=($("obLP").value||"").trim();if(lp)purpose=(why?why+"；":"")+"法人变更："+lp;}
