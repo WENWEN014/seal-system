@@ -299,26 +299,34 @@ async function opNewCo(body){
   const position=(body.position||"").trim();
   const seals=body.seals||[];
   const want_lic=body.license!==false;
+  const note=(body.note||"").trim();
   const operator=(body.operator||"").trim()||"二维";
   if(!name) return {ok:false,msg:"公司名不能为空"};
-  if(!legal) return {ok:false,msg:"法人不能为空"};
-  if(DB.items.some(i=>i["公司名称"]===name)) return {ok:false,msg:"公司 "+name+" 已存在"};
+  // 公司已存在时不再拦截：沿用其已有法人/家族/类型/注册时间（表单留空则自动填充）
+  const exist=DB.items.find(i=>i["公司名称"]===name);
+  const fam=family||(exist&&exist["家族"])||"";
+  const lp=legal||(exist&&exist["法人"])||"";
+  const ct=ctype||(exist&&exist["公司类型"])||"大陆";
+  const rg=reg||(exist&&exist["注册时间"])||"";
+  if(!lp) return {ok:false,msg:"法人不能为空（新公司请填写，已有公司将自动沿用）"};
   const pos_id=position?await ensureLoc(position,"位置",operator):"";
   const created=[],newItems=[],newMovs=[];
   for(const s of seals){
     const id=nextItemId();
-    newItems.push({item_id:id,公司名称:name,家族:family,法人:legal,公司类型:ctype,注册时间:reg,
+    newItems.push({item_id:id,公司名称:name,家族:fam,法人:lp,公司类型:ct,注册时间:rg,
       资料类型:s,资料类别:"章",当前位置ID:pos_id,当前位置:position||"待分配",当前位置类型:"位置",
-      状态:STAT_IN,持有人:"",出库时间:"",更新时间:nowStr(),备注:""});
+      状态:STAT_IN,持有人:"",出库时间:"",更新时间:nowStr(),备注:note});
     created.push(s);
-    newMovs.push(movRow({item_id:id,公司名称:name,资料类型:s,动作:"入库",起点名称:"新注册",终点ID:pos_id,终点名称:position||"待分配",终点类型:"位置",操作人:operator,事由:"新注册入库"}));
+    newMovs.push(movRow({item_id:id,公司名称:name,资料类型:s,动作:"入库",起点名称:"新增",终点ID:pos_id,终点名称:position||"待分配",终点类型:"位置",操作人:operator,事由:"新增公司入库"}));
   }
-  if(want_lic){
+  // 仅当公司不存在、或该公司尚未有营业执照时，才自动建档营业执照，避免重复
+  const hasLic=exist&&DB.items.some(i=>i["公司名称"]===name&&i["资料类型"]==="营业执照");
+  if(want_lic&&!hasLic){
     const id=nextItemId();
-    newItems.push({item_id:id,公司名称:name,家族:family,法人:legal,公司类型:ctype,注册时间:reg,
+    newItems.push({item_id:id,公司名称:name,家族:fam,法人:lp,公司类型:ct,注册时间:rg,
       资料类型:"营业执照",资料类别:"执照",当前位置ID:"",当前位置:"待分配",当前位置类型:"位置",状态:STAT_IN,持有人:"",出库时间:"",更新时间:nowStr(),备注:"存放柜二，待定位"});
     created.push("营业执照");
-    newMovs.push(movRow({item_id:id,公司名称:name,资料类型:"营业执照",动作:"入库",起点名称:"新注册",终点类型:"位置",终点名称:"待分配",操作人:operator,事由:"新注册入库"}));
+    newMovs.push(movRow({item_id:id,公司名称:name,资料类型:"营业执照",动作:"入库",起点名称:"新增",终点类型:"位置",终点名称:"待分配",操作人:operator,事由:"新增公司入库"}));
   }
   if(newItems.length){
     const {error}=await sb.from("items").insert(newItems);
@@ -326,24 +334,25 @@ async function opNewCo(body){
     const {error:me}=await sb.from("movements").insert(newMovs);
     if(me) return {ok:false,msg:errMsg(me)};
   }
-  return {ok:true,created};
+  return {ok:true,created,existed:!!exist};
 }
 async function opAddItem(body){
   const name=(body.name||"").trim();
   const itype=(body.type||body.item||"").trim();
   const position=(body.position||"").trim();
   const operator=(body.operator||"").trim()||"二维";
+  const note=(body.note||"").trim();
   if(!name) return {ok:false,msg:"公司名不能为空"};
   if(!itype) return {ok:false,msg:"资料类型不能为空"};
   const tpl=DB.items.find(i=>i["公司名称"]===name);
   if(!tpl) return {ok:false,msg:"找不到公司："+name};
-  if(DB.items.some(i=>i["公司名称"]===name&&i["资料类型"]===itype)) return {ok:false,msg:name+" 已有 "+itype};
+  // 允许同一公司存在多件同类型资料（如补刻第二枚法人章）
   const kind=(itype==="营业执照"||itype==="国外执照")?"执照":"章";
   const pos=position||(kind==="章"?tpl["当前位置"]:"待分配");
   const pos_id=(pos&&pos!=="待分配")?await ensureLoc(pos,"位置",operator):"";
   const id=nextItemId();
   const row={item_id:id,公司名称:name,家族:tpl["家族"],法人:tpl["法人"],公司类型:tpl["公司类型"],注册时间:tpl["注册时间"],
-    资料类型:itype,资料类别:kind,当前位置ID:pos_id,当前位置:pos||"待分配",当前位置类型:"位置",状态:STAT_IN,持有人:"",出库时间:"",更新时间:nowStr(),备注:""};
+    资料类型:itype,资料类别:kind,当前位置ID:pos_id,当前位置:pos||"待分配",当前位置类型:"位置",状态:STAT_IN,持有人:"",出库时间:"",更新时间:nowStr(),备注:note};
   const {error}=await sb.from("items").insert(row);
   if(error) return {ok:false,msg:errMsg(error)};
   const m=movRow({item_id:id,公司名称:name,资料类型:itype,动作:"入库",起点名称:"新增",终点ID:pos_id,终点名称:pos||"待分配",终点类型:"位置",操作人:operator,事由:"新增资料入库"});
@@ -944,10 +953,11 @@ function niRenderForm(){
   const bs=DB.locations.filter(l=>l["类型"]==="位置").map(l=>l["名称"]);
   const bskSel='<div class="fg"><span class="t">入库到筐</span><select id="niBsk">'
     +bs.map(b=>'<option>'+esc(b)+'</option>').join("")+'</select></div>';
+  const noteF='<div class="frow"><div class="fg"><span class="t">备注</span><input id="niNote" style="width:340px" placeholder="选填，如刻章事由/补刻说明"></div></div>';
   let f='';
   if(mode==="new"){
     f='<div class="frow">'
-      +'<div class="fg"><span class="t">公司名称 *</span><input id="niName" style="width:240px"></div>'
+      +'<div class="fg"><span class="t">公司名称 *</span><input id="niName" style="width:240px" onchange="niPrefill()" placeholder="已存在的公司也可直接补章"></div>'
       +'<div class="fg"><span class="t">法人 *</span><input id="niLP"></div>'
       +'<div class="fg"><span class="t">家族</span><input id="niFam"></div>'
       +'<div class="fg"><span class="t">类型</span><select id="niType"><option>大陆</option><option>国外</option></select></div>'
@@ -955,6 +965,7 @@ function niRenderForm(){
       +'<div class="frow"><span class="t">勾选本次入库的章：</span>'
       +SEAL_TYPES.map(s=>'<label class="chk"><input type="checkbox" class="niSeal" value="'+s+'">'+s+'</label>').join("")
       +'<label class="chk"><input type="checkbox" id="niLic" checked>营业执照</label></div>'
+      +noteF
       +'<div style="margin-top:8px"><button onclick="niExec()">执行入库</button></div>';
   }else{
     const cos=[...new Set(DB.items.map(i=>i["公司名称"]))].sort((a,b)=>a.localeCompare(b,"zh"));
@@ -962,12 +973,23 @@ function niRenderForm(){
       +'<div class="fg"><span class="t">选择公司</span><select id="niCo" style="width:260px" onchange="niExistChk()">'
       +cos.map(c=>'<option>'+esc(c)+'</option>').join("")+'</select></div>'
       +bskSel+'</div>'
-      +'<div class="frow"><span class="t">勾选要补的章（已有的会标注）：</span><span id="niExistSeals"></span></div>'
+      +'<div class="frow"><span class="t">已有资料：</span><span id="niExistSeals"></span></div>'
+      +'<div class="frow"><span class="t">勾选要补的章（已有的可再加一份）：</span></div>'
       +'<div class="frow" id="niPick"></div>'
+      +noteF
       +'<div style="margin-top:8px"><button onclick="niExec()">执行入库</button></div>';
   }
   box.innerHTML=f;
   if(mode==="exist") niExistChk();
+}
+// 新建公司模式下，若填写的公司已存在，自动沿用其法人/家族/类型，避免重复录入
+function niPrefill(){
+  const name=(($("niName")||{}).value||"").trim();
+  const t=DB.items.find(i=>i["公司名称"]===name);
+  if(!t)return;
+  if($("niLP")&&!$("niLP").value)$("niLP").value=t["法人"]||"";
+  if($("niFam")&&!$("niFam").value)$("niFam").value=t["家族"]||"";
+  const ty=$("niType");if(ty&&!ty.value)ty.value=(t["公司类型"]==="国外")?"国外":"大陆";
 }
 function niExistChk(){
   const name=($("niCo")||{}).value||"";
@@ -976,10 +998,9 @@ function niExistChk(){
   const es=$("niExistSeals"), pk=$("niPick");
   if(es) es.innerHTML=mine.length?('已有：'+[...have].map(h=>'<span class="tag">'+esc(h)+'</span>').join("")):'<span class="muted">该公司无任何资料</span>';
   if(!pk)return;
-  const opts=SEAL_TYPES.concat(["营业执照"]).filter(t=>!have.has(t));
-  pk.innerHTML=opts.length
-    ? '<span class="t">可补：</span>'+opts.map(t=>'<label class="chk"><input type="checkbox" class="niPick" value="'+t+'">'+t+'</label>').join("")
-    : '<span class="muted">该公司章证齐全，无需补章</span>';
+  // 全部章证均可勾选；已有的标注“（已有，可再加）”，允许补刻第二枚同类型章
+  const opts=SEAL_TYPES.concat(["营业执照"]);
+  pk.innerHTML=opts.map(t=>'<label class="chk"><input type="checkbox" class="niPick" value="'+t+'">'+t+(have.has(t)?'<span class="muted">（已有，可再加）</span>':'')+'</label>').join("");
 }
 async function niExec(){
   const mode=($("niMode")||{}).value||"new";
@@ -994,15 +1015,16 @@ async function niExec(){
     if(!seals.length&&!($("niLic")||{}).checked){toast("请至少勾选一项资料",false);return;}
     const r=await api("/api/newco",{name,legalPerson:lp,family:($("niFam").value||"").trim(),
       type:($("niType")||{}).value||"大陆",regTime:"",position:pos,seals,
-      license:($("niLic")||{}).checked,operator:OPERATOR||"二维"});
+      license:($("niLic")||{}).checked,operator:OPERATOR||"二维",note:($("niNote").value||"").trim()});
     if(!r.ok){toast(r.msg,false);return;}
-    toast("已入库："+name+"（"+r.created.join("、")+"）",true);
+    toast("已入库："+name+(r.existed?"（已有公司，仅补新增资料）":"")+"（"+r.created.join("、")+"）",true);
   }else{
     const name=($("niCo")||{}).value||"";
     const seals=[...document.querySelectorAll(".niPick:checked")].map(x=>x.value);
     if(!seals.length){toast("请勾选要补的章",false);return;}
+    const note=($("niNote").value||"").trim();
     for(const s of seals){
-      const r=await api("/api/additem",{name,item:s,position:pos,operator:OPERATOR||"二维"});
+      const r=await api("/api/additem",{name,item:s,position:pos,operator:OPERATOR||"二维",note});
       if(!r.ok){toast(s+"："+(r.msg||"失败"),false);return;}
     }
     toast("已入库 "+seals.length+" 件（"+name+"）",true);
