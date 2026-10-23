@@ -1414,6 +1414,9 @@ function invMatrix(){
     r.cab=r.basket.cab||"—";
     r.bk=r.basket.label;
     r.show=esc(r.co);
+    const ci=companyLatestInfo(r.co)||{};
+    r.fam=ci["家族"]||"";
+    r.leg=ci["法人"]||"";
     r.lines=line2.some(x=>x)?[line1,line2]:[line1];
   });
   return {cols,groups:rows};
@@ -1456,14 +1459,15 @@ function renderInvTable(){
   let h='<div class="toolbar"><b>'+esc(invTitle())+' — '+sels+' 个筐 / '+groups.length+' 行'
     +'</b><span class="mini">'+nowStr()+'</span></div>';
   if(!sels){box.innerHTML=h+'<div class="muted" style="padding:14px">请先在上方勾选要盘点的柜子或筐。</div>';return;}
-  h+='<div class="scroll"><table><tr><th>序号</th><th>柜子</th><th>筐</th><th>公司</th>'
+  h+='<div class="scroll"><table><tr><th>序号</th><th>柜子</th><th>筐</th><th>公司</th><th>家族</th><th>法人</th>'
     +cols.map(c=>'<th>'+esc(c)+'</th>').join("")+'<th>实际核对</th></tr>';
-  if(!groups.length)h+='<tr><td colspan="'+(cols.length+5)+'" class="muted">该范围暂无资料</td></tr>';
+  if(!groups.length)h+='<tr><td colspan="'+(cols.length+7)+'" class="muted">该范围暂无资料</td></tr>';
   groups.forEach(g=>{
     const rs=g.lines.length>1?' rowspan="'+g.lines.length+'"':"";
     g.lines.forEach((line,li)=>{
       h+='<tr>';
-      if(li===0)h+='<td'+rs+'>'+g.no+'</td><td'+rs+'>'+esc(g.cab)+'</td><td'+rs+'>'+esc(g.bk)+'</td><td'+rs+'>'+g.show+'</td>';
+      if(li===0)h+='<td'+rs+'>'+g.no+'</td><td'+rs+'>'+esc(g.cab)+'</td><td'+rs+'>'+esc(g.bk)+'</td><td'+rs+'>'+g.show+'</td>'
+        +'<td'+rs+'>'+esc(g.fam)+'</td><td'+rs+'>'+esc(g.leg)+'</td>';
       line.forEach(v=>h+='<td class="'+(v==="无"||v==="已缴销"?"muted":"")+'">'+esc(v)+'</td>');
       h+='<td></td></tr>';
     });
@@ -1482,7 +1486,7 @@ async function exportInvXlsx(){
   if(!invExportGuard(groups,invSelected().length))return;
   const title=invTitle()+"-盘点表-"+todayStr();
   try{
-    const header=["序号","柜子","筐","公司"].concat(cols).concat(["实际核对"]);
+    const header=["序号","柜子","筐","公司","家族","法人"].concat(cols).concat(["实际核对"]);
     const aoa=[];
     aoa.push(header.map((_,j)=> j===0?title:""));
     aoa.push(header.slice());
@@ -1493,18 +1497,20 @@ async function exportInvXlsx(){
       const span=lines.length, first=r;
       aoa[first]=aoa[first]||[];
       aoa[first][0]=g.no;
-      aoa[first][1]=(g.lead&&g.lead[0])||"";
-      aoa[first][2]=(g.lead&&g.lead[1])||"";
+      aoa[first][1]=(g.lead&&g.lead[0])||g.cab||"";
+      aoa[first][2]=(g.lead&&g.lead[1])||g.bk||"";
       aoa[first][3]=g.co;
+      aoa[first][4]=g.fam||"";
+      aoa[first][5]=g.leg||"";
       for(let k=0;k<span;k++){
         aoa[first+k]=aoa[first+k]||[];
         for(let c=0;c<header.length;c++){ if(aoa[first+k][c]===undefined) aoa[first+k][c]=""; }
         const line=lines[k]||[];
-        for(let j=0;j<line.length;j++){ aoa[first+k][4+j]=line[j]; }
+        for(let j=0;j<line.length;j++){ aoa[first+k][6+j]=line[j]; }
       }
       if(span>1){
         merges.push({s:{r:first,c:0},e:{r:first+span-1,c:0}});
-        for(let c=1;c<=3;c++) merges.push({s:{r:first,c},e:{r:first+span-1,c}});
+        for(let c=1;c<=5;c++) merges.push({s:{r:first,c},e:{r:first+span-1,c}});
       }
       r+=span;
     }
@@ -1518,7 +1524,7 @@ async function exportInvXlsx(){
         const a=ws[enc({r:i,c:j})]; if(!a) continue;
         const v=a.v;
         const st={alignment:{horizontal:"center",vertical:"center",wrapText:true},border:thinAll};
-        if(j>=4&&j<header.length-1){
+        if(j>=6&&j<header.length-1){
           if(v==="无"||v==="已缴销") st.font={color:"9AA0A6"};
           else if(v&&v!=="✓"&&!String(v).startsWith("✓×")) st.font={color:"BF8700"};
         }
@@ -1526,7 +1532,7 @@ async function exportInvXlsx(){
       }
     }
     ws["!merges"]=merges;
-    ws["!cols"]=header.map(h=>{const w=({"序号":6,"柜子":9,"筐":17,"公司":30,"实际核对":16})[h];return {wch:w||13};});
+    ws["!cols"]=header.map(h=>{const w=({"序号":6,"柜子":9,"筐":17,"公司":30,"家族":12,"法人":12,"实际核对":16})[h];return {wch:w||13};});
     const wb=XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb,ws,"盘点表");
     const out=XLSX.write(wb,{bookType:"xlsx",type:"array"});
@@ -1556,12 +1562,13 @@ function printInv(){
   const nrow=groups.reduce((s,g)=>s+g.lines.length,0);
   let h='<h2 style="font-size:16px">'+esc(invTitle())+' 盘点表（'+invSelected().length+' 个筐 / '
     +groups.length+' 家公司 / '+nrow+' 行）　'+nowStr()+'</h2>'
-    +'<table><tr><th>序号</th><th>柜子</th><th>筐</th><th>公司</th>'+cols.map(c=>'<th>'+esc(c)+'</th>').join("")+'<th>实际核对</th></tr>';
+    +'<table><tr><th>序号</th><th>柜子</th><th>筐</th><th>公司</th><th>家族</th><th>法人</th>'+cols.map(c=>'<th>'+esc(c)+'</th>').join("")+'<th>实际核对</th></tr>';
   groups.forEach(g=>{
     const rs=g.lines.length>1?' rowspan="'+g.lines.length+'"':"";
     g.lines.forEach((line,li)=>{
       h+='<tr>';
-      if(li===0)h+='<td'+rs+'>'+g.no+'</td><td'+rs+'>'+esc(g.cab)+'</td><td'+rs+'>'+esc(g.bk)+'</td><td'+rs+'>'+g.show+'</td>';
+      if(li===0)h+='<td'+rs+'>'+g.no+'</td><td'+rs+'>'+esc(g.cab)+'</td><td'+rs+'>'+esc(g.bk)+'</td><td'+rs+'>'+g.show+'</td>'
+        +'<td'+rs+'>'+esc(g.fam)+'</td><td'+rs+'>'+esc(g.leg)+'</td>';
       line.forEach(v=>h+='<td>'+esc(v)+'</td>');
       h+='<td></td></tr>';
     });
