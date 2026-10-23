@@ -242,32 +242,77 @@ async function opMove(body){
   const operator=(body.operator||"").trim()||"二维";
   const purpose=(body.purpose||"").trim();
   const date=body.date||todayStr();
+  const dest_map=body.dest_map||{};          // 入库：每枚回原位
+  const refresh_info=!!body.refresh_info;     // 入库：顺带刷公司最新家族/法人
+  const new_family=(body.new_family||"").trim();
+  const new_legal=(body.new_legal||"").trim();
   if(!item_ids.length) return {ok:false,msg:"请选择资料"};
   if(!action) return {ok:false,msg:"请指定动作"};
   const isOff=action==="缴销";
-  if(!isOff && !rawDest) return {ok:false,msg:"请指定目标位置/人员"};
-  const items=(await sbGet("items")).filter(i=>item_ids.includes(i["item_id"]));
+  if(!isOff && action!=="入库" && !rawDest) return {ok:false,msg:"请指定目标位置/人员"};
+  const all=await sbGet("items");
+  const items=all.filter(i=>item_ids.includes(i["item_id"]));
   if(!items.length) return {ok:false,msg:"没有匹配的资料"};
-  const common={};
-  let dest_id="",dest_name=rawDest;
-  if(isOff){
-    // 缴销：仅标记状态，不改变当前位置
-    common["状态"]=STAT_OFF;common["持有人"]="";common["出库时间"]="";dest_name="（已缴销）";
-  }else{
-    dest_id=await ensureLoc(rawDest,dest_type,operator);
-    common["当前位置ID"]=dest_id;common["当前位置"]=rawDest;common["当前位置类型"]=dest_type;
-    if(action==="出库"){common["状态"]=STAT_OUT;common["持有人"]=rawDest;common["出库时间"]=date;}
-    else {common["状态"]=STAT_IN;common["持有人"]="";common["出库时间"]="";}
+
+  // 调拨 + 信息更新：该公司全部在库章/执照的家族/法人同步（一条原子更新）
+  if(action==="调拨" && (new_family||new_legal)){
+    const cos=[...new Set(items.map(i=>i["公司名称"]))];
+    const before=all.filter(i=>cos.includes(i["公司名称"])&&i["状态"]===STAT_IN);
+    const upd={更新时间:nowStr()};
+    if(new_family)upd["家族"]=new_family;
+    if(new_legal)upd["法人"]=new_legal;
+    for(const c of cos){
+      const {error}=await sb.from("items").update(upd).eq("公司名称",c).eq("状态",STAT_IN);
+      if(error) return {ok:false,msg:errMsg(error)};
+    }
+    // 信息变更留痕：未勾选移动的在库资料（如执照），各记一条"信息变更"
+    const selSet=new Set(item_ids);
+    const movs=[];
+    before.forEach(i=>{
+      if(selSet.has(i["item_id"]))return; // 勾选的走调拨合并留痕
+      const chg=[];
+      if(new_family && i["家族"]!==new_family)chg.push("家族 "+i["家族"]+"→"+new_family);
+      if(new_legal && i["法人"]!==new_legal)chg.push("法人 "+i["法人"]+"→"+new_legal);
+      if(chg.length)movs.push(movRow({item_id:i["item_id"],公司名称:i["公司名称"],资料类型:i["资料类型"],
+        动作:"信息变更",起点名称:"（仅信息更新）",终点名称:"（不变）",操作人:operator,事由:chg.join("；")}));
+    });
+    if(movs.length){const {error:me}=await sb.from("movements").insert(movs);if(me) return {ok:false,msg:errMsg(me)};}
   }
-  common["更新时间"]=nowStr();
-  if(purpose) common["备注"]=purpose;
-  const {error:ue}=await sb.from("items").update(common).in("item_id",item_ids);
-  if(ue) return {ok:false,msg:errMsg(ue)};
-  const movements=items.map(i=>{
-    const src_id=i["当前位置ID"],src_name=i["当前位置"],src_type=i["当前位置类型"]||"位置";
-    return movRow({item_id:i["item_id"],公司名称:i["公司名称"],资料类型:i["资料类型"],动作:action,
-      起点ID:src_id,起点名称:src_name,起点类型:src_type,终点ID:dest_id,终点名称:dest_name,终点类型:(isOff?"":dest_type),操作人:operator,事由:purpose});
-  });
+
+  const movements=[];
+  if(action==="入库"){
+    for(const i of items){
+      const dip=dest_map[i["item_id"]]||"";
+      const des=await ensureLoc(dip,"位置",operator);
+      const f=refresh_info?companyLatestInfo(i["公司名称"]):{};
+      const upd={状态:STAT_IN,持有人:"",出库时间:"",当前位置ID:des,当前位置:dip||"待分配",
+        当前位置类型:"位置",更新时间:nowStr()};
+      if(f["家族"]!=null)upd["家族"]=f["家族"];
+      if(f["法人"]!=null)upd["法人"]=f["法人"];
+      const {error}=await sb.from("items").update(upd).eq("item_id",i["item_id"]);
+      if(error) return {ok:false,msg:errMsg(error)};
+      const src_id=i["当前位置ID"],src_name=i["当前位置"],src_type=i["当前位置类型"]||"位置";
+      movements.push(movRow({item_id:i["item_id"],公司名称:i["公司名称"],资料类型:i["资料类型"],动作:"入库",
+        起点ID:src_id,起点名称:src_name,起点类型:src_type,终点ID:des,终点名称:dip||"待分配",终点类型:"位置",操作人:operator,事由:purpose}));
+    }
+  }else{
+    const common={};
+    let dest_id="",dest_name=rawDest;
+    if(isOff){common["状态"]=STAT_OFF;common["持有人"]="";common["出库时间"]="";dest_name="（已缴销）";}
+    else{ dest_id=await ensureLoc(rawDest,dest_type,operator); common["当前位置ID"]=dest_id;common["当前位置"]=rawDest;common["当前位置类型"]=dest_type;
+      if(action==="出库"){common["状态"]=STAT_OUT;common["持有人"]=rawDest;common["出库时间"]=date;}
+      else {common["状态"]=STAT_IN;common["持有人"]="";common["出库时间"]="";}
+    }
+    common["更新时间"]=nowStr();
+    if(purpose)common["备注"]=purpose;
+    const {error:ue}=await sb.from("items").update(common).in("item_id",item_ids);
+    if(ue) return {ok:false,msg:errMsg(ue)};
+    items.forEach(i=>{
+      const src_id=i["当前位置ID"],src_name=i["当前位置"],src_type=i["当前位置类型"]||"位置";
+      movements.push(movRow({item_id:i["item_id"],公司名称:i["公司名称"],资料类型:i["资料类型"],动作:action,
+        起点ID:src_id,起点名称:src_name,起点类型:src_type,终点ID:dest_id,终点名称:dest_name,终点类型:(isOff?"":dest_type),操作人:operator,事由:purpose}));
+    });
+  }
   if(movements.length){const {error:me}=await sb.from("movements").insert(movements);if(me) return {ok:false,msg:errMsg(me)};}
   return {ok:true,moved:movements.length,detail:movements.length+" 件："+action};
 }
@@ -1083,9 +1128,12 @@ function renderOpsList(){
     const allSel=its.every(i=>cur.has(i["item_id"]));
     h+='<tr><td><input type="checkbox" '+(allSel?"checked":"")+' onchange="toggleCo(\''+esc(n)+'\',this.checked)"></td>'
       +'<td><b>'+esc(n)+'</b></td><td>'+esc(its[0]["家族"])+'</td><td>'+esc(its[0]["法人"])+'</td>'
-      +'<td><div class="seallist">'+its.map(i=>
-        '<label class="chk"><input type="checkbox" '+(cur.has(i["item_id"])?"checked":"")
-        +' onchange="toggleItem(\''+i["item_id"]+'\',this.checked)">'+esc(i["资料类型"])+'</label>').join("")+'</div></td></tr>';
+      +'<td><div class="seallist">'+its.map(i=>{
+        let lbl=esc(i["资料类型"]);
+        if(ui.ops==="in"){const ol=origLocOf(i["item_id"]);lbl+=' <span class="mini">'+(ol?("原位："+ol):"原位：待分配")+'</span>';}
+        return '<label class="chk"><input type="checkbox" '+(cur.has(i["item_id"])?"checked":"")
+          +' onchange="toggleItem(\''+i["item_id"]+'\',this.checked)">'+lbl+'</label>';
+      }).join("")+'</div></td></tr>';
   });
   if(!cos.length)h+='<tr><td colspan="5" class="muted">没有符合条件的公司</td></tr>';
   $("opsList").innerHTML=h+'</table></div>';
@@ -1102,6 +1150,28 @@ function toggleItem(id,on){
   if(on)cur.add(id);else cur.delete(id);
   renderOpsList();
 }
+// 取某章出库前的原在库位置：最近一次"出库"轨迹的起点
+function origLocOf(item_id){
+  let best=null;
+  for(const m of (DB.movements||[])){
+    if(m["item_id"]===item_id && m["动作"]==="出库"){
+      const t=m["时间"]||"";
+      if(!best||t>best.t)best={t,name:m["起点名称"]||""};
+    }
+  }
+  return best?best.name:"";
+}
+// 取公司最新一条记录的家族/法人，作为公司当前信息
+function companyLatestInfo(name){
+  const list=DB.items.filter(i=>i["公司名称"]===name);
+  if(!list.length)return {};
+  list.sort((a,b)=>{
+    const ta=a["更新时间"]||"",tb=b["更新时间"]||"";
+    if(ta!==tb)return ta<tb?1:-1;
+    return (Number(a["item_id"])||0)<(Number(b["item_id"])||0)?1:-1;
+  });
+  return {家族:list[0]["家族"],法人:list[0]["法人"]};
+}
 function renderOpsBar(){
   const cur=sel[ui.ops],n=cur.size;
   let h='<div class="opbar"><div class="fg"><span class="t">已选 '+n+' 件</span></div>';
@@ -1111,12 +1181,19 @@ function renderOpsBar(){
   }else if(ui.ops==="mv"){
     const bs=DB.locations.filter(l=>l["类型"]==="位置").map(l=>l["名称"]);
     h+='<div class="fg"><span class="t">目标筐</span><select id="obDest">'+bs.map(p=>'<option>'+esc(p)+'</option>').join("")+'</select></div>';
+  }else if(ui.ops==="in"){
+    h+='<div class="fg"><span class="t">入库方式</span><span class="muted">各自回原位（见列表标注）</span></div>';
   }else if(ui.ops!=="off"){
     const bs=DB.locations.filter(l=>l["类型"]==="位置").map(l=>l["名称"]);
     h+='<div class="fg"><span class="t">目标筐</span><select id="obDest">'+bs.map(p=>'<option>'+esc(p)+'</option>').join("")+'</select></div>';
   }
   h+='<div class="fg"><span class="t">备注</span><input id="obWhy" style="width:200px" placeholder="选填，记录事由"></div>';
-  if(ui.ops==="mv")h+='<div class="fg"><span class="t">新法人（选填）</span><input id="obLP" style="width:140px"></div>';
+  if(ui.ops==="mv"){
+    const fams=[...new Set(DB.items.map(i=>i["家族"]).filter(Boolean))];
+    h+='<datalist id="famList">'+fams.map(f=>'<option value="'+esc(f)+'">').join("")+'</datalist>';
+    h+='<div class="fg"><span class="t">新家族（选填）</span><input id="obFam" list="famList" style="width:140px" placeholder="可下拉选/可新建"></div>';
+    h+='<div class="fg"><span class="t">新法人（选填）</span><input id="obLP" style="width:140px" placeholder="不填则不变"></div>';
+  }
   const label=ui.ops==="out"?"出库":ui.ops==="in"?"入库":ui.ops==="mv"?"调拨":"缴销";
   h+='<button '+(n?"":"disabled")+' onclick="execOps()">执行'+label+'</button></div>';
   $("opsBar").innerHTML=h;
@@ -1125,19 +1202,29 @@ async function execOps(){
   const cur=sel[ui.ops],ids=[...cur];
   if(!ids.length){toast("请先勾选资料",false);return;}
   const why=($("obWhy").value||"").trim();
-  let action,dest="",destType="位置";
-  if(ui.ops==="out"){action="出库";dest=$("obDest").value;destType="人员";}
-  else if(ui.ops==="in"){action="入库";dest=$("obDest").value;}
-  else if(ui.ops==="mv"){action="调拨";dest=$("obDest").value;}
-  else {action="缴销";}
   if(!OPERATOR)askOperator();
-  let purpose=why;
-  if(ui.ops==="mv"){const lp=($("obLP").value||"").trim();if(lp)purpose=(why?why+"；":"")+"法人变更："+lp;}
-  const r=await api("/api/move",{item_ids:ids,action,dest_name:dest,dest_type:destType,
-    operator:OPERATOR||"二维",purpose,date:todayStr()});
+  let r;
+  if(ui.ops==="in"){
+    const dmap={}; ids.forEach(id=>{const ol=origLocOf(id);if(ol)dmap[id]=ol;});
+    r=await api("/api/move",{item_ids:ids,action:"入库",dest_map:dmap,refresh_info:true,
+      operator:OPERATOR||"二维",purpose:why,date:todayStr()});
+  }else if(ui.ops==="mv"){
+    const dest=$("obDest").value;const lp=($("obLP").value||"").trim();const fam=($("obFam").value||"").trim();
+    let purpose=why;
+    if(fam||lp)purpose=(why?why+"；":"")+((fam?"家族变更："+fam:"")+(fam&&lp?"；":"")+(lp?"法人变更："+lp:""));
+    r=await api("/api/move",{item_ids:ids,action:"调拨",dest_name:dest,dest_type:"位置",
+      new_family:fam,new_legal:lp,operator:OPERATOR||"二维",purpose,date:todayStr()});
+  }else{
+    let action,dest="",destType="位置";
+    if(ui.ops==="out"){action="出库";dest=$("obDest").value;destType="人员";}
+    else {action="缴销";}
+    let purpose=why;
+    r=await api("/api/move",{item_ids:ids,action,dest_name:dest,dest_type:destType,
+      operator:OPERATOR||"二维",purpose,date:todayStr()});
+  }
   if(!r.ok){toast(r.msg,false);return;}
   cur.clear();selCo.clear();
-  toast(r.detail||("已"+action),true);await reloadAll();
+  toast(r.detail||("已执行"),true);await reloadAll();
 }
 function renderLedger(){
   const mvs=DB.movements.slice().reverse().slice(0,100);
