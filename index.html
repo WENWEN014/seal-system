@@ -281,8 +281,9 @@ async function opMove(body){
 
   const movements=[];
   if(action==="入库"){
+    const manual=rawDest;   // 手动指定入库位置：填了则全部入到该位置（覆盖各自回原位）
     for(const i of items){
-      const dip=dest_map[i["item_id"]]||"";
+      const dip=manual||dest_map[i["item_id"]]||"";
       const des=await ensureLoc(dip,"位置",operator);
       const f=refresh_info?companyLatestInfo(i["公司名称"]):{};
       const upd={状态:STAT_IN,持有人:"",出库时间:"",当前位置ID:des,当前位置:dip||"待分配",
@@ -1182,7 +1183,17 @@ function renderOpsBar(){
     const bs=DB.locations.filter(l=>l["类型"]==="位置").map(l=>l["名称"]);
     h+='<div class="fg"><span class="t">目标筐</span><select id="obDest">'+bs.map(p=>'<option>'+esc(p)+'</option>').join("")+'</select></div>';
   }else if(ui.ops==="in"){
-    h+='<div class="fg"><span class="t">入库方式</span><span class="muted">各自回原位（见列表标注）</span></div>';
+    const ids=[...cur];
+    const ols=ids.map(id=>origLocOf(id));
+    let auto="";
+    if(ids.length&&ols.every(o=>o===ols[0]))auto=ols[0]||"";
+    const key="in|"+auto;
+    if(renderOpsBar._k!==key){renderOpsBar._k=key;renderOpsBar._ed=false;}
+    const val=(renderOpsBar._ed&&$("obDest"))?$("obDest").value:auto;
+    const bs=DB.locations.filter(l=>l["类型"]==="位置").map(l=>l["名称"]);
+    h+='<datalist id="locList">'+bs.map(p=>'<option value="'+esc(p)+'">').join("")+'</datalist>';
+    h+='<div class="fg"><span class="t">入库位置</span><input id="obDest" list="locList" style="width:150px" value="'+esc(val)+'" placeholder="留空=各自回原位" oninput="renderOpsBar._ed=true"></div>';
+    h+='<div class="fg"><span class="mini muted">'+(auto?"已带出原位置，可手改":"原位不同/未登记可手填；留空=各自回原位")+'</span></div>';
   }else if(ui.ops!=="off"){
     const bs=DB.locations.filter(l=>l["类型"]==="位置").map(l=>l["名称"]);
     h+='<div class="fg"><span class="t">目标筐</span><select id="obDest">'+bs.map(p=>'<option>'+esc(p)+'</option>').join("")+'</select></div>';
@@ -1205,8 +1216,9 @@ async function execOps(){
   if(!OPERATOR)askOperator();
   let r;
   if(ui.ops==="in"){
+    const dest=($("obDest").value||"").trim();
     const dmap={}; ids.forEach(id=>{const ol=origLocOf(id);if(ol)dmap[id]=ol;});
-    r=await api("/api/move",{item_ids:ids,action:"入库",dest_map:dmap,refresh_info:true,
+    r=await api("/api/move",{item_ids:ids,action:"入库",dest_name:dest,dest_map:dmap,refresh_info:true,
       operator:OPERATOR||"二维",purpose:why,date:todayStr()});
   }else if(ui.ops==="mv"){
     const dest=$("obDest").value;const lp=($("obLP").value||"").trim();const fam=($("obFam").value||"").trim();
