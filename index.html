@@ -591,7 +591,17 @@ async function opBatchImp(body){
 async function reloadAll(){
   $("status").textContent="加载中…";
   const r=await api("/api/load");
-  if(!r.ok){$("status").textContent="加载失败";
+  if(!r.ok){
+    // 未登录：显示登录门禁（而非报错红框），点开网址必须先登录才能看
+    if((r.msg||"").indexOf("请先登录")>=0){
+      $("status").textContent="未登录";
+      $("main").innerHTML='<div class="card" style="text-align:center;padding:48px 20px">'
+        +'<h2 class="sec">请先登录后查看</h2>'
+        +'<p class="muted" style="margin:8px 0 18px">本系统需要登录才能查看资料。请使用管理员下发的账号密码登录。</p>'
+        +'<p><button onclick="showLogin()">登录</button></p></div>';
+      return;
+    }
+    $("status").textContent="加载失败";
     $("main").innerHTML='<div class="card"><p style="color:#d1242f">数据加载失败：'+esc(r.msg||"")+'</p></div>';return;}
   DB.items=r.items||[];DB.locations=r.locations||[];DB.movements=r.movements||[];
   DB.cabinets=r.cabinets||[];DB.families=r.families||[];
@@ -628,7 +638,8 @@ async function doLogin(){
   AUTH.role=role;AUTH.user=u;AUTH.token=data.session.access_token;AUTH.ts=Date.now();
   localStorage.setItem("seal_role",role);
   if(!OPERATOR){OPERATOR=u;localStorage.setItem("seal_operator",OPERATOR);}
-  closeModal();syncHeader();render();toast("已登录，"+(role==="master"?"主账号 ":"员工前台 ")+u,true);
+  closeModal();syncHeader();toast("已登录，"+(role==="master"?"主账号 ":"员工前台 ")+u,true);
+  await reloadAll();  /* 登录成功后立即拉取数据（否则看板显示全 0） */
 }
 async function doLogout(){
   if(sb) await sb.auth.signOut();
