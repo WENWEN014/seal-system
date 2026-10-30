@@ -230,7 +230,7 @@ async function loadAll(){
   const locations=await fetchAll("locations");
   const movements=await fetchAll("movements");
   const cab_names=[...new Set(locations.filter(l=>l["类型"]==="柜子"&&l["名称"]).map(l=>l["名称"]))].sort((a,b)=>a.localeCompare(b,"zh"));
-  const cabinets=cab_names.map(c=>({name:c,rows:ROWS_PER_CAB,cols:COLS_PER_ROW}));
+  const cabinets=cab_names.map(c=>({name:c,rows:ROWS,cols:COLS}));
   const families=[...new Set(items.filter(i=>i["家族"]).map(i=>i["家族"]))].sort((a,b)=>a.localeCompare(b,"zh"));
   return {ok:true,items,locations,movements,cabinets,families};
 }
@@ -472,7 +472,7 @@ async function opAddLoc(body){
   const row={"id":nextLocId(),"名称":name,"类型":ltype,"柜子":"","排":"","位":"","关联家族":"","负责人":"","备注":""};
   if(ltype==="位置"&&cabinet){
     const used=new Set(DB.locations.filter(l=>l["柜子"]===cabinet&&l["类型"]==="位置"&&l["排"]).map(l=>l["排"]+"_"+l["位"]));
-    outer: for(let r=1;r<=ROWS_PER_CAB;r++) for(let c=1;c<=COLS_PER_ROW;c++){ if(!used.has(r+"_"+c)){row["排"]=String(r);row["位"]=String(c);break outer;} }
+    outer: for(let r=1;r<=ROWS;r++) for(let c=1;c<=COLS;c++){ if(!used.has(r+"_"+c)){row["排"]=String(r);row["位"]=String(c);break outer;} }
   }
   if(family) row["关联家族"]=family;
   if(owner) row["负责人"]=owner;
