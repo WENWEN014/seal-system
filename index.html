@@ -722,12 +722,13 @@ function renderDash(m){
     h+='</table>';}
   h+='</div>';
   const byF={};DB.items.forEach(i=>{if(i["状态"]===STAT_OFF)return;
-    const f=i["家族"]||"—";byF[f]=byF[f]||{n:0,out:0,co:new Set()};
-    byF[f].n++;byF[f].co.add(i["公司名称"]);if(i["状态"]===STAT_OUT)byF[f].out++;});
+    const f=i["家族"]||"—";byF[f]=byF[f]||{n:0,out:0,co:new Set(),oco:new Set()};
+    byF[f].n++;byF[f].co.add(i["公司名称"]);if(i["状态"]===STAT_OUT){byF[f].out++;byF[f].oco.add(i["公司名称"]);}});
+  const basketCount=f=>DB.locations.filter(l=>l["类型"]==="位置"&&(l["关联家族"]===f||(f!=="—"&&(l["名称"]||"").indexOf(f)===0))).length;
   h+='<div class="card"><h2 class="sec">各家族资料统计</h2><div class="scroll"><table>'
-    +'<tr><th>家族</th><th>公司数</th><th>资料数</th><th>在外部</th><th></th></tr>';
+    +'<tr><th>家族</th><th>收纳筐数量</th><th>公司数</th><th>证照在外公司数</th><th>资料数</th><th>在外部</th><th></th></tr>';
   Object.keys(byF).sort().forEach(f=>{const d=byF[f];
-    h+='<tr><td><b>'+esc(f)+'</b></td><td>'+d.co.size+'</td><td>'+d.n+'</td>'
+    h+='<tr><td><b>'+esc(f)+'</b></td><td>'+basketCount(f)+'</td><td>'+d.co.size+'</td><td>'+d.oco.size+'</td><td>'+d.n+'</td>'
       +'<td>'+(d.out?'<span class="badge b-out">'+d.out+'</span>':'0')+'</td>'
       +'<td><button class="sm ghost" onclick="ui.q=\''+esc(f)+'\';ui.qType=\'家族\';switchTab(\'search\')">查看</button></td></tr>';});
   m.innerHTML=h+'</table></div></div>';
