@@ -259,7 +259,7 @@ async function opMove(body){
   const action=body.action||"";
   const rawDest=(body.dest_name||"").trim();
   const dest_type=body.dest_type||"位置";
-  const operator=(body.operator||"").trim()||"二维";
+  const operator=(body.operator||"").trim()||"管理员";
   const purpose=(body.purpose||"").trim();
   const date=body.date||todayStr();
   const dest_map=body.dest_map||{};          // 入库：每枚回原位
@@ -339,7 +339,7 @@ async function opMove(body){
 }
 async function opSaveLayout(body){
   const baskets=body.baskets||[];
-  const operator=(body.operator||"").trim()||"二维";
+  const operator=(body.operator||"").trim()||"管理员";
   if(!baskets.length) return {ok:false,msg:"无布局数据"};
   const changes=[];
   for(const b of baskets){
@@ -372,7 +372,7 @@ async function opNewCo(body){
   const seals=body.seals||[];
   const want_lic=body.license!==false;
   const note=(body.note||"").trim();
-  const operator=(body.operator||"").trim()||"二维";
+  const operator=(body.operator||"").trim()||"管理员";
   if(!name) return {ok:false,msg:"公司名不能为空"};
   // 公司已存在时不再拦截：沿用其已有法人/家族/类型/注册时间（表单留空则自动填充）
   const exist=DB.items.find(i=>i["公司名称"]===name);
@@ -412,7 +412,7 @@ async function opAddItem(body){
   const name=(body.name||"").trim();
   const itype=(body.type||body.item||"").trim();
   const position=(body.position||"").trim();
-  const operator=(body.operator||"").trim()||"二维";
+  const operator=(body.operator||"").trim()||"管理员";
   const note=(body.note||"").trim();
   if(!name) return {ok:false,msg:"公司名不能为空"};
   if(!itype) return {ok:false,msg:"资料类型不能为空"};
@@ -434,7 +434,7 @@ async function opAddItem(body){
 }
 async function opEditItem(body){
   const item_id=body.item_id||"";
-  const operator=(body.operator||"").trim()||"二维";
+  const operator=(body.operator||"").trim()||"管理员";
   if(!item_id) return {ok:false,msg:"缺少 item_id"};
   const t=DB.items.find(i=>i["item_id"]===item_id);
   if(!t) return {ok:false,msg:"找不到该资料"};
@@ -456,7 +456,7 @@ async function opEditItem(body){
 }
 async function opDelItem(body){
   const item_id=body.item_id||"";
-  const operator=(body.operator||"").trim()||"二维";
+  const operator=(body.operator||"").trim()||"管理员";
   if(!item_id) return {ok:false,msg:"缺少 item_id"};
   const t=DB.items.find(i=>i["item_id"]===item_id);
   if(!t) return {ok:false,msg:"找不到该资料"};
@@ -469,7 +469,7 @@ async function opDelItem(body){
 }
 async function opDelCo(body){
   const name=(body.name||"").trim();
-  const operator=(body.operator||"").trim()||"二维";
+  const operator=(body.operator||"").trim()||"管理员";
   if(!name) return {ok:false,msg:"公司名不能为空"};
   const n=DB.items.filter(i=>i["公司名称"]===name).length;
   if(!n) return {ok:false,msg:"找不到公司："+name};
@@ -486,7 +486,7 @@ async function opAddLoc(body){
   const cabinet=(body.cabinet||"").trim();
   const family=(body.family||"").trim();
   const owner=(body.owner||"").trim();
-  const operator=(body.operator||"").trim()||"二维";
+  const operator=(body.operator||"").trim()||"管理员";
   if(!name) return {ok:false,msg:"名称不能为空"};
   if(DB.locations.some(l=>l["名称"]===name)) return {ok:false,msg:name+" 已存在"};
   const row={"id":nextLocId(),"名称":name,"类型":ltype,"柜子":"","排":"","位":"","关联家族":"","负责人":"","备注":""};
@@ -505,7 +505,7 @@ async function opAddLoc(body){
 }
 async function opDelLoc(body){
   const name=(body.name||"").trim();
-  const operator=(body.operator||"").trim()||"二维";
+  const operator=(body.operator||"").trim()||"管理员";
   if(!name) return {ok:false,msg:"名称不能为空"};
   const l=DB.locations.find(x=>x["名称"]===name);
   if(!l) return {ok:false,msg:"找不到「"+name+"」"};
@@ -526,7 +526,7 @@ async function opDelLoc(body){
 }
 async function opDelCab(body){
   const name=(body.name||"").trim();
-  const operator=(body.operator||"").trim()||"二维";
+  const operator=(body.operator||"").trim()||"管理员";
   if(!name) return {ok:false,msg:"名称不能为空"};
   const cab=DB.locations.find(l=>l["名称"]===name);
   if(!cab||cab["类型"]!=="柜子") return {ok:false,msg:"找不到柜子「"+name+"」"};
@@ -544,7 +544,7 @@ async function opDelCab(body){
 async function opRenameLoc(body){
   const oldN=(body.old||body.name||"").trim();
   const newN=(body.new||"").trim();
-  const operator=(body.operator||"").trim()||"二维";
+  const operator=(body.operator||"").trim()||"管理员";
   if(!oldN||!newN) return {ok:false,msg:"原名称和新名称都不能为空"};
   if(oldN===newN) return {ok:false,msg:"新名称与原名称相同"};
   if(newN.length>20) return {ok:false,msg:"名称过长"};
@@ -574,7 +574,7 @@ async function opRenameLoc(body){
 }
 async function opBatchImp(body){
   const rows=body.rows||[];
-  const operator=(body.operator||"").trim()||"二维";
+  const operator=(body.operator||"").trim()||"管理员";
   if(!rows.length) return {ok:false,msg:"无数据"};
   const created=[],skipped=[],newItems=[],newMovs=[];
   for(const r of rows){
@@ -668,7 +668,7 @@ async function doLogout(){
   syncHeader();render();toast("已退出，当前为只读前台",true);
 }
 function askOperator(){
-  const n=prompt("请输入操作人姓名（将记录在所有操作留痕中）：",OPERATOR||"二维");
+  const n=prompt("请输入操作人姓名（将记录在所有操作留痕中）：",OPERATOR||"管理员");
   if(n&&n.trim()){OPERATOR=n.trim();localStorage.setItem("seal_operator",OPERATOR);}
   syncHeader();
 }
@@ -797,7 +797,7 @@ async function delItem(id){
   const i=DB.items.find(x=>x["item_id"]===id);if(!i)return;
   if(!isAdmin()){toast("仅管理员可删除",false);return;}
   if(!confirm("确认删除「"+i["公司名称"]+"」的「"+i["资料类型"]+"」？此操作不可恢复。"))return;
-  const r=await api("/api/delitem",{item_id:id,operator:OPERATOR||"二维"});
+  const r=await api("/api/delitem",{item_id:id,operator:OPERATOR||"管理员"});
   if(!r.ok){toast(r.msg,false);return;}
   closeModal();toast("已删除该资料",true);await reloadAll();
 }
@@ -1120,7 +1120,7 @@ async function niExec(){
     if(!seals.length&&!($("niLic")||{}).checked){toast("请至少勾选一项资料",false);return;}
     const r=await api("/api/newco",{name,legalPerson:lp,family:($("niFam").value||"").trim(),
       type:($("niType")||{}).value||"大陆",regTime:"",position:pos,seals,
-      license:($("niLic")||{}).checked,operator:OPERATOR||"二维",note:($("niNote").value||"").trim()});
+      license:($("niLic")||{}).checked,operator:OPERATOR||"管理员",note:($("niNote").value||"").trim()});
     if(!r.ok){toast(r.msg,false);return;}
     toast("已入库："+name+(r.existed?"（已有公司，仅补新增资料）":"")+"（"+r.created.join("、")+"）",true);
   }else{
@@ -1129,7 +1129,7 @@ async function niExec(){
     if(!seals.length){toast("请勾选要补的章",false);return;}
     const note=($("niNote").value||"").trim();
     for(const s of seals){
-      const r=await api("/api/additem",{name,item:s,position:pos,operator:OPERATOR||"二维",note});
+      const r=await api("/api/additem",{name,item:s,position:pos,operator:OPERATOR||"管理员",note});
       if(!r.ok){toast(s+"："+(r.msg||"失败"),false);return;}
     }
     toast("已入库 "+seals.length+" 件（"+name+"）",true);
@@ -1251,20 +1251,20 @@ async function execOps(){
     const dest=($("obDest").value||"").trim();
     const dmap={}; ids.forEach(id=>{const ol=origLocOf(id);if(ol)dmap[id]=ol;});
     r=await api("/api/move",{item_ids:ids,action:"入库",dest_name:dest,dest_map:dmap,refresh_info:true,
-      operator:OPERATOR||"二维",purpose:why,date:todayStr()});
+      operator:OPERATOR||"管理员",purpose:why,date:todayStr()});
   }else if(ui.ops==="mv"){
     const dest=$("obDest").value;const lp=($("obLP").value||"").trim();const fam=($("obFam").value||"").trim();
     let purpose=why;
     if(fam||lp)purpose=(why?why+"；":"")+((fam?"家族变更："+fam:"")+(fam&&lp?"；":"")+(lp?"法人变更："+lp:""));
     r=await api("/api/move",{item_ids:ids,action:"调拨",dest_name:dest,dest_type:"位置",
-      new_family:fam,new_legal:lp,operator:OPERATOR||"二维",purpose,date:todayStr()});
+      new_family:fam,new_legal:lp,operator:OPERATOR||"管理员",purpose,date:todayStr()});
   }else{
     let action,dest="",destType="位置";
     if(ui.ops==="out"){action="出库";dest=$("obDest").value;destType="人员";}
     else {action="缴销";}
     let purpose=why;
     r=await api("/api/move",{item_ids:ids,action,dest_name:dest,dest_type:destType,
-      operator:OPERATOR||"二维",purpose,date:todayStr()});
+      operator:OPERATOR||"管理员",purpose,date:todayStr()});
   }
   if(!r.ok){toast(r.msg,false);return;}
   cur.clear();selCo.clear();
@@ -1656,7 +1656,7 @@ async function doNewCo(){
   const seals=[...document.querySelectorAll(".ncSeal:checked")].map(x=>x.value);
   const r=await api("/api/newco",{name,legalPerson:lp,family:($("ncFam").value||"").trim(),
     type:$("ncType").value,regTime:$("ncReg").value||"",position:$("ncBsk").value,
-    seals,license:$("ncLic").checked,operator:OPERATOR||"二维"});
+    seals,license:$("ncLic").checked,operator:OPERATOR||"管理员"});
   if(!r.ok){toast(r.msg,false);return;}
   toast("已新增公司 "+name,true);await reloadAll();
 }
@@ -1673,7 +1673,7 @@ async function doImport(){
       公章:c[5]||"0",法人章:c[6]||"0",财务章:c[7]||"0",合同章:c[8]||"0",发票章:c[9]||"0",position:c[10]||""});
   }
   if(!rows.length){toast("无有效数据",false);return;}
-  const r=await api("/api/batchimp",{rows,operator:OPERATOR||"二维"});
+  const r=await api("/api/batchimp",{rows,operator:OPERATOR||"管理员"});
   if(!r.ok){toast(r.msg,false);return;}
   toast("已导入 "+r.created.length+" 件"+(r.skipped.length?"，跳过 "+r.skipped.length+" 件（已存在）":""),true);
   $("impText").value="";await reloadAll();
