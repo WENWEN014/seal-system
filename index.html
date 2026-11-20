@@ -1210,7 +1210,7 @@ function renderOpsBar(){
   let h='<div class="opbar"><div class="fg"><span class="t">已选 '+n+' 件</span></div>';
   if(ui.ops==="out"){
     const ps=DB.locations.filter(l=>l["类型"]==="人员").map(l=>l["名称"]);
-    h+='<div class="fg"><span class="t">领用人</span><select id="obDest">'+ps.map(p=>'<option>'+esc(p)+'</option>').join("")+'</select></div>';
+    h+='<div class="fg"><span class="t">领用人</span><input id="obDest" list="personList" style="width:150px" value="'+esc(ps[0]||"")+'" placeholder="输入或选择领用人"><datalist id="personList">'+ps.map(p=>'<option value="'+esc(p)+'">').join("")+'</datalist></div>';
   }else if(ui.ops==="mv"){
     const bs=DB.locations.filter(l=>l["类型"]==="位置").map(l=>l["名称"]);
     h+='<div class="fg"><span class="t">目标筐</span><select id="obDest">'+bs.map(p=>'<option>'+esc(p)+'</option>').join("")+'</select></div>';
@@ -1260,7 +1260,7 @@ async function execOps(){
       new_family:fam,new_legal:lp,operator:OPERATOR||"管理员",purpose,date:todayStr()});
   }else{
     let action,dest="",destType="位置";
-    if(ui.ops==="out"){action="出库";dest=$("obDest").value;destType="人员";}
+    if(ui.ops==="out"){action="出库";dest=($("obDest").value||"").trim();destType="人员";if(!dest){toast("请填写领用人",false);return;}}
     else {action="缴销";}
     let purpose=why;
     r=await api("/api/move",{item_ids:ids,action,dest_name:dest,dest_type:destType,
